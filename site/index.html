@@ -409,12 +409,22 @@ const projection = d3.geoOrthographic().clipAngle(90).precision(0.7);
 const path = d3.geoPath(projection, ctx);
 let rot = [-136, -28], zoom = 1;
 const ZMIN = 0.75, ZMAX = 14;
+// Large, high-density screens are capped to a pixel budget so a frame costs about the
+// same on a PC as on a phone; while the globe spins fast the budget drops further.
+const PX_REST = 2.2e6, PX_SPIN = 0.9e6;
+let pxBudget = PX_REST, RDPR = DPR;
+function applyRes() {
+  RDPR = Math.min(DPR, Math.sqrt(pxBudget / (W * H)));
+  const cw = Math.round(W * RDPR), ch = Math.round(H * RDPR);
+  if (canvas.width !== cw || canvas.height !== ch) { canvas.width = cw; canvas.height = ch; }
+  dirty = true;
+}
+function setBudget(b) { if (b !== pxBudget) { pxBudget = b; applyRes(); } }
 function resize() {
   const r = stage.getBoundingClientRect();
   W = Math.max(200, r.width); H = Math.max(200, r.height);
-  canvas.width = Math.round(W * DPR); canvas.height = Math.round(H * DPR);
   R0 = Math.min(W, H) * 0.42;
-  dirty = true;
+  applyRes();
 }
 new ResizeObserver(resize).observe(stage);
 resize();
@@ -487,7 +497,7 @@ function fillFeature(f, style) { ctx.beginPath(); path(f); ctx.fillStyle = style
 function draw() {
   applyView();
   const R = R0 * zoom, cx = W / 2, cy = H / 2, c = center();
-  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  ctx.setTransform(RDPR, 0, 0, RDPR, 0, 0);
   ctx.clearRect(0, 0, W, H);
   placed.length = 0;
   if (R < Math.hypot(W, H)) {
@@ -500,7 +510,7 @@ function draw() {
   ctx.beginPath(); path({ type: 'Sphere' }); ctx.fillStyle = og; ctx.fill();
   ctx.beginPath(); path(graticule); ctx.strokeStyle = C.grat; ctx.lineWidth = 0.6; ctx.stroke();
   for (let k = 0; k < 5; k++) { ctx.beginPath(); path(classFC[k]); ctx.fillStyle = C.land[k]; ctx.fill(); }
-  for (const f of disputed) fillFeature(f, hatch);
+  if (!fastMotion) for (const f of disputed) fillFeature(f, hatch);
 
   const v = curView();
   const asking = viewAsking(v);
@@ -558,7 +568,7 @@ function draw() {
   }
   if (spinPhase === 'spin') drawNeedle(cx, cy);
 
-  if (showLabels) {
+  if (showLabels && !fastMotion) {
     for (const p of labelPlaces) {
       if (p.id === hideId) continue;
       if (mode === 'explore' && sel === p) continue;
@@ -573,7 +583,7 @@ function draw() {
       label(p.n, x, y, size, { weight: size > 13 ? 700 : 500 });
     }
   }
-  if (citiesOn && zoom >= 1.7) {
+  if (citiesOn && zoom >= 1.7 && !fastMotion) {
     for (const ci of D.cities) {
       if (mode === 'explore' && sel === ci) continue;
       if (nameShown && v.loc.city === ci) continue;
@@ -582,7 +592,7 @@ function draw() {
       label(ci.n, x + 6, y, 11, { align: 'left', weight: 500, color: C.ink, haloW: 2.8 });
     }
   }
-  if (showLabels && zoom >= 3) {
+  if (showLabels && zoom >= 3 && !fastMotion) {
     for (const p of markerPlaces) {
       if (p.id === hideId || (mode === 'explore' && sel === p) || (nameShown && tPlace === p)) continue;
       if (Math.sqrt(p.a) * R > 7 || !visible(p.lp, c, 0.2)) continue;
@@ -708,10 +718,10 @@ function animateTo(lon, lat, z1, opt = {}) {
   if (REDUCED) dur = Math.min(dur, 500);
   const lz0 = Math.log(z0), lz1 = Math.log(z1);
   const dip = spins ? 0 : clamp(dist / 180, 0, 0.5) * (Math.min(z0, z1) > 1.4 ? 1 : 0.3);
-  const start = performance.now();
+  const start = opt.start != null ? opt.start : performance.now();
   const a = {
     step(t) {
-      const k = Math.min(1, (t - start) / dur);
+      const k = clamp((t - start) / dur, 0, 1);
       if (spins) {
         rot[0] = l0 + dl * rouletteEase(k);
         rot[1] = p0 + (p1 - p0) * easeInOut(Math.min(1, k / 0.7));
@@ -731,6 +741,7 @@ function animateTo(lon, lat, z1, opt = {}) {
   // and game steps (the answer timer in a battle) must not wait for it.
   if (opt.done) a.guard = setTimeout(() => { if (anim === a) { a.finish(); endAnim(); } }, dur + 400);
   vel = null;
+  return a;
 }
 function endAnim() {
   const a = anim; if (!a) return;
@@ -740,9 +751,12 @@ function endAnim() {
 }
 function flyTo(o, opt = {}) { animateTo(o.lp[0], o.lp[1], opt.zoom || zoomFor(o), opt); }
 
-let frameN = 0, lastT = performance.now();
+let frameN = 0, lastT = performance.now(), lastLon = 0, fastMotion = false;
 function frame(t) {
   const dt = Math.min(64, t - lastT); lastT = t; frameN++;
+  const moved = Math.abs(((rot[0] - lastLon) % 360 + 540) % 360 - 180);
+  fastMotion = spinPhase === 'spin' && moved / Math.max(1, t - (frame.prevT || t - 16)) > 0.06;  // > 60°/s
+  frame.prevT = t; lastLon = rot[0];
   if (anim) {
     const done = anim.step(t);
     dirty = true;
@@ -1002,34 +1016,35 @@ document.querySelectorAll('#target-seg button').forEach(b => b.onclick = () => {
 let spinToken = 0, lastPointer = 0;
 // Spin to o: roulette spin (onLand fires when it stops), zoom onto the spot,
 // then hold on the map for HOLD_MS before onDone.
+// Every step (stop, zoom, done) is scheduled on the clock from the start time t0, so it
+// happens at the same moment on every device, however fast that device can draw.
+// opt.t0 lets a battle start everyone's spin at one shared moment.
 function spinTo(o, zoomTarget, opt = {}) {
   const tok = ++spinToken;
+  const t0 = opt.t0 != null ? opt.t0 : now();
+  const at = (ms, fn) => setTimeout(() => { if (tok === spinToken) fn(); }, Math.max(0, t0 + ms - now()));
   spinning = true; spinPhase = 'spin'; needleName = ''; needleMask = !!opt.mask;
-  hideTip(); setHover(null);
+  hideTip(); setHover(null); setBudget(PX_SPIN);
   $('#readout').hidden = false; $('#readout').textContent = needleMask ? '▼ ？？？' : '▼';
   $('#spin-btn').disabled = true;
   vel = null;
-  animateTo(o.lp[0], o.lp[1], Math.min(zoom, 1), {
-    spins: REDUCED ? 0 : 3, dur: SPIN_MS,
-    done: () => {
-      if (tok !== spinToken) return;
-      spinPhase = 'zoom';
-      if (!needleMask) { const f = countryAt(center()); $('#readout').textContent = '▼ ' + (f ? (placeById.get(f.id) || {}).n || '' : (o.n || '海の上')); }
-      if (opt.onLand) opt.onLand();
-      animateTo(o.lp[0], o.lp[1], zoomTarget, {
-        dur: ZOOM_MS,
-        done: () => {
-          if (tok !== spinToken) return;
-          spinning = false; spinPhase = ''; $('#readout').hidden = true;
-          lastInteract = now(); dirty = true;
-          setTimeout(() => {
-            if (tok !== spinToken) return;
-            $('#spin-btn').disabled = false;
-            if (opt.onDone) opt.onDone();
-          }, HOLD_MS);
-        }
-      });
-    }
+  const spinAnim = animateTo(o.lp[0], o.lp[1], Math.min(zoom, 1), { spins: REDUCED ? 0 : 3, dur: SPIN_MS, start: t0 });
+  let zoomAnim = null;
+  at(SPIN_MS, () => {
+    if (anim === spinAnim) { spinAnim.finish(); anim = null; }
+    normRot(); spinPhase = 'zoom'; fastMotion = false; setBudget(PX_REST);
+    if (!needleMask) { const f = countryAt(center()); $('#readout').textContent = '▼ ' + (f ? (placeById.get(f.id) || {}).n || '' : (o.n || '海の上')); }
+    if (opt.onLand) opt.onLand();
+    zoomAnim = animateTo(o.lp[0], o.lp[1], zoomTarget, { dur: ZOOM_MS, start: t0 + SPIN_MS });
+  });
+  at(SPIN_MS + ZOOM_MS, () => {
+    if (zoomAnim && anim === zoomAnim) { zoomAnim.finish(); anim = null; }
+    normRot(); spinning = false; spinPhase = ''; $('#readout').hidden = true;
+    lastInteract = now(); dirty = true;
+  });
+  at(SPIN_TOTAL, () => {
+    $('#spin-btn').disabled = false;
+    if (opt.onDone) opt.onDone();
   });
 }
 function shuffle() {
@@ -1559,9 +1574,18 @@ const B = {
   settings: { count: 10, time: 15, mode: 'choice', speed: 'normal', diffs: new Set([1, 2, 3, 4, 5]), regs: new Set(REGIONS) },
   stage: '', read: null, allowed: 0, msPerChar: 115,
   round: 0, total: 0, q: null, qp: null, answers: new Map(), results: null, myAns: null,
-  tStart: 0, timeLimit: 20, tick: 0, hostTimer: 0, hb: 0, used: new Set(), revealed: 0, view: idleView(), joinCode: ''
+  tStart: 0, timeLimit: 20, tick: 0, hostTimer: 0, hb: 0, used: new Set(), revealed: 0, view: idleView(), joinCode: '',
+  offset: 0, bestRtt: Infinity, startAt: 0
 };
 const HB_MS = 4000, GONE_MS = 13000;
+// Shared clock: guests estimate (host clock - own clock) from ping/pong round trips and keep
+// the sample with the shortest round trip. Questions carry a start time on the host clock,
+// so every device spins, stops and starts reading at the same moment.
+const LEAD_MS = 1500;
+function resetClock() { B.offset = 0; B.bestRtt = B.isHost ? 0 : Infinity; }
+function ping() { if (!B.isHost && B.net) send({ k: 'ping', t: Date.now() }); }
+function pingBurst() { for (let i = 0; i < 5; i++) setTimeout(ping, i * 250); }
+const hostToLocal = hostMs => now() + (hostMs - B.offset - Date.now());
 function send(m) { if (B.net) B.net.send(Object.assign({ room: B.code, from: B.me.id }, m)); }
 const activeIds = () => [...B.peers.entries()].filter(([id, p]) => id === B.me.id || now() - p.last < GONE_MS).map(([id]) => id);
 const pname = id => (B.peers.get(id) || {}).name || B.names.get(id) || '退出したプレイヤー';
@@ -1575,7 +1599,7 @@ async function connect(code, asHost) {
   try {
     B.net = await openNet(code, onMsg, st => {
       if (st === 'SUBSCRIBED') {
-        B.phase = 'room'; sayHello(true);
+        B.phase = 'room'; sayHello(true); resetClock(); pingBurst();
         clearInterval(B.hb); B.hb = setInterval(heartbeat, HB_MS);
         renderBattle();
         if (!asHost) setTimeout(() => { if (B.code === code && !B.hostId && B.phase === 'room') { B.err = 'この部屋のホストが見つかりません。部屋コードを確認するか、しばらく待ってください。'; renderBattle(); } }, 6000);
@@ -1591,7 +1615,7 @@ async function connect(code, asHost) {
 }
 function sayHello(first) { send({ k: 'hello', name: B.me.name, host: B.isHost, first: !!first }); }
 function heartbeat() {
-  sayHello(false);
+  sayHello(false); ping();
   let changed = false;
   for (const [id, p] of B.peers) if (id !== B.me.id && now() - p.last > GONE_MS) { B.peers.delete(id); changed = true; if (id === B.hostId && !B.isHost) { B.err = 'ホストとの接続が切れました。'; } }
   if (changed) { renderPlayersLive(); if (B.isHost && B.phase === 'asking') maybeReveal(); if (B.err) renderBattle(); }
@@ -1621,7 +1645,19 @@ function onMsg(m) {
       else renderPlayersLive();
       if (B.isHost && B.phase === 'asking') maybeReveal();
       break;
-    case 'sync': if (!B.isHost && m.to === B.me.id) applySync(m); break;
+    case 'sync':
+      if (B.isHost || m.to !== B.me.id) break;
+      // a question in progress needs the clock estimate first; everything else applies at once
+      if ((m.phase === 'asking' || m.phase === 'spinning') && B.bestRtt === Infinity) setTimeout(() => applySync(m), 900);
+      else applySync(m);
+      break;
+    case 'ping': if (B.isHost && from !== B.me.id) send({ k: 'pong', to: from, t: m.t, th: Date.now() }); break;
+    case 'pong':
+      if (m.to === B.me.id && !B.isHost) {
+        const rtt = Date.now() - m.t;
+        if (rtt >= 0 && rtt < B.bestRtt) { B.bestRtt = rtt; B.offset = m.th + rtt / 2 - Date.now(); }
+      }
+      break;
     case 'cfg': if (!B.isHost) { B.settingsView = m.settings; if (B.phase === 'room') renderBattle(); } break;
     case 'q': onQuestion(m, 0); break;
     case 'ans':
@@ -1637,18 +1673,17 @@ function onMsg(m) {
       if (m.scores) B.scores = new Map(m.scores);
       renderBattle(); dirty = true; break;
     case 'host':  // someone took over as host
-      B.hostId = from; if (from !== B.me.id) B.isHost = false; B.err = ''; renderBattle(); break;
+      B.hostId = from; if (from !== B.me.id) B.isHost = false; B.err = ''; resetClock(); pingBurst(); renderBattle(); break;
   }
 }
 function sendSync(to) {
-  const elapsed = B.phase === 'asking' && B.stage === 'reading' ? now() - B.tStart : 0;
-  send({ k: 'sync', to, phase: B.phase, round: B.round, total: B.total, qp: B.qp, timeLimit: B.timeLimit, msPerChar: B.msPerChar, elapsed,
+  send({ k: 'sync', to, phase: B.phase, round: B.round, total: B.total, qp: B.qp, timeLimit: B.timeLimit, msPerChar: B.msPerChar, startAt: B.startAt,
     scores: [...B.scores], names: [...B.names], results: B.results, settings: settingsWire() });
 }
 function applySync(m) {
   B.scores = new Map(m.scores || []); (m.names || []).forEach(([id, n]) => B.names.set(id, n));
   B.settingsView = m.settings;
-  if ((m.phase === 'asking' || m.phase === 'spinning') && m.qp) { onQuestion({ round: m.round, total: m.total, q: m.qp, timeLimit: m.timeLimit, msPerChar: m.msPerChar }, m.elapsed || 0); return; }
+  if ((m.phase === 'asking' || m.phase === 'spinning') && m.qp) { onQuestion({ round: m.round, total: m.total, q: m.qp, timeLimit: m.timeLimit, msPerChar: m.msPerChar, startAt: m.startAt }); return; }
   if (m.phase === 'reveal' && m.qp) { B.round = m.round; B.total = m.total; B.qp = m.qp; B.q = fromWire(m.qp); onReveal({ round: m.round, results: m.results || [], scores: m.scores, names: m.names }); return; }
   if (m.phase === 'end') { onEnd({ scores: m.scores, names: m.names }); return; }
   renderBattle();
@@ -1679,28 +1714,30 @@ function hostNext() {
   B.used.add(q.id);
   const r = B.round + 1;
   const msPerChar = READ_SPEEDS[B.settings.speed] || READ_SPEEDS.normal;
-  send({ k: 'q', round: r, total: B.total, q: toWire(q, B.settings.mode === 'choice' ? makeChoices(q) : null), timeLimit: B.settings.time, msPerChar });
+  send({ k: 'q', round: r, total: B.total, q: toWire(q, B.settings.mode === 'choice' ? makeChoices(q) : null), timeLimit: B.settings.time, msPerChar, startAt: Date.now() + LEAD_MS });
   clearTimeout(B.hostTimer);
-  B.hostTimer = setTimeout(() => hostReveal(r), SPIN_TOTAL + INTRO_MS + readPlan(q.text, msPerChar).total + B.settings.time * 1000 + 2500);
+  B.hostTimer = setTimeout(() => hostReveal(r), LEAD_MS + SPIN_TOTAL + INTRO_MS + readPlan(q.text, msPerChar).total + B.settings.time * 1000 + 2500);
 }
-function onQuestion(m, elapsed) {
+function onQuestion(m) {
   B.round = m.round; B.total = m.total; B.qp = m.q; B.q = fromWire(m.q); B.timeLimit = m.timeLimit;
   B.msPerChar = m.msPerChar || READ_SPEEDS.normal;
   B.answers = new Map(); B.myAns = null; B.results = null; B.err = ''; B.stage = ''; B.read = null;
+  B.startAt = m.startAt || (Date.now() + B.offset);
   B.phase = 'spinning';
   B.view = { state: 'spinning', loc: B.q.loc, hideName: B.q.hideName, hideLoc: false, ok: null };
   if (mode !== 'battle') setMode('battle');
   renderBattle();
   const r = m.round;
-  // reading starts at the same moment for everyone (after spin + intro); the clock and the
-  // speed bonus count from the start of reading
+  // local times of the shared schedule: spin start, intro ("問題"), reading start
+  const t0 = hostToLocal(B.startAt);
+  const introAt = t0 + SPIN_TOTAL, readAt = introAt + INTRO_MS;
+  const plan = readPlan(B.q.text, B.msPerChar);
   const startReading = () => {
-    if (B.round !== r || B.phase !== 'asking') return;
+    if (B.round !== r || B.phase !== 'asking' || B.stage === 'reading') return;
     B.stage = 'reading';
-    const plan = readPlan(B.q.text, B.msPerChar);
-    B.tStart = now() - elapsed;
+    B.tStart = readAt;
     B.allowed = plan.total + B.timeLimit * 1000;
-    B.read = { plan, start: B.tStart, elId: 'b-qtext', done: false };
+    B.read = { plan, start: readAt, elId: 'b-qtext', done: false };
     renderBattle(); startReader();
     clearInterval(B.tick); B.tick = setInterval(tickTimer, 200); tickTimer();
     focusAnswer();
@@ -1708,13 +1745,24 @@ function onQuestion(m, elapsed) {
   const begin = () => {
     if (B.round !== r || B.phase !== 'spinning') return;
     B.phase = 'asking'; B.view.state = 'asking'; dirty = true;
-    if (elapsed > 0) { startReading(); if (isNarrow()) revealCard('#view-battle .qcard'); return; }
-    B.stage = 'intro'; renderBattle(); SFX.play('question');
     if (isNarrow()) revealCard('#view-battle .qcard');
-    setTimeout(startReading, INTRO_MS);
+    if (now() >= readAt - 50) { startReading(); return; }
+    B.stage = 'intro'; renderBattle(); SFX.play('question');
+    setTimeout(startReading, readAt - now());
   };
-  if (elapsed > 0) { flyTo(B.q.loc, { zoom: Math.min(zoomFor(B.q.loc), 4.2), dur: 500, done: begin }); }
-  else spinTo(B.q.loc, Math.min(zoomFor(B.q.loc), 4.2), { mask: B.q.hideName, onLand: () => { if (B.round === r) { B.view.state = 'asking'; dirty = true; } }, onDone: begin });
+  const land = () => { if (B.round === r) { B.view.state = 'asking'; dirty = true; } };
+  const z = Math.min(zoomFor(B.q.loc), 4.2);
+  if (now() > t0 + SPIN_MS) {
+    // joined after the stop: go straight there and follow the remaining schedule
+    land(); flyTo(B.q.loc, { zoom: z, dur: 500 });
+    setTimeout(begin, Math.max(0, introAt - now()));
+  } else {
+    setTimeout(() => {
+      if (B.round !== r) return;
+      spinTo(B.q.loc, z, { t0, mask: B.q.hideName, onLand: land, onDone: begin });
+      if (B.phase === 'spinning') renderBattle();
+    }, Math.max(0, t0 - now()));
+  }
 }
 function tickTimer() {
   if (B.phase !== 'asking' || B.stage !== 'reading') { clearInterval(B.tick); return; }
@@ -1844,7 +1892,7 @@ function renderBattle() {
   } else if (P === 'spinning' || P === 'asking') {
     const q = B.q;
     const meta = `<div class="qmeta"><span>第${B.round}問 / ${B.total}</span><span class="stars">${stars(q.diff)}</span>${q.genre ? `<span class="tag">${esc(q.genre)}</span>` : ''}${q.type !== '国名' ? `<span class="tag">答え: ${esc(q.type)}</span>` : ''}${locTag(q)}</div>`;
-    if (P === 'spinning') html = `<div class="qcard">${meta}<p class="qtext">地球儀が回っています…</p></div>`;
+    if (P === 'spinning') html = `<div class="qcard">${meta}<p class="qtext">${spinning ? '地球儀が回っています…' : 'まもなく地球儀が回ります…'}</p></div>`;
     else if (B.stage !== 'reading') html = `<div class="qcard">${meta}${readingHTML(null, 'b-qtext')}</div>`;
     else {
       const left = Math.max(0, B.allowed - (now() - B.tStart));
