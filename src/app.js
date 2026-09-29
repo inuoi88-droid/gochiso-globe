@@ -121,8 +121,9 @@ let mode = 'explore';          // explore | quiz | battle
 let sel = null;                // selected place or city (explore)
 let hoverId = null;
 let showLabels = true, showCities = true, autoSpin = !REDUCED;
-let spinning = false;          // spin animation running
-let needleName = '';
+let spinning = false;          // spin or landing zoom running (input blocked)
+let spinPhase = '';            // 'spin' | 'zoom' | ''
+let needleName = '', needleMask = false;
 const idleView = () => ({ state: 'idle', loc: null, hideName: false, hideLoc: false, ok: null });
 // What the globe shows for an active question. Solo quiz and battle each keep their own.
 function curView() {
@@ -238,7 +239,7 @@ function draw() {
     drawPin(x, y, tCol, v.state === 'answered' ? '' : '?');
     if (nameShown && v.loc.name) label(v.loc.name, x, y - 46, 14, { weight: 700, force: true, haloW: 4 });
   }
-  if (spinning) drawNeedle(cx, cy);
+  if (spinPhase === 'spin') drawNeedle(cx, cy);
 
   if (showLabels) {
     for (const p of labelPlaces) {
@@ -357,9 +358,19 @@ function pickAt(x, y) {
 
 /* ---------------- animation ---------------- */
 let anim = null, vel = null, lastInteract = 0;
-const SPIN_MS = REDUCED ? 500 : 3400;
+// Shuffle timing: a long roulette spin, a short zoom onto the spot, then a pause on the map.
+const SPIN_MS = REDUCED ? 500 : 6200, ZOOM_MS = REDUCED ? 250 : 900, HOLD_MS = REDUCED ? 300 : 1400;
+const SPIN_TOTAL = SPIN_MS + ZOOM_MS + HOLD_MS;
+// Velocity ramps up for the first 8% of the spin, then decays slowly, so the last
+// seconds creep across a few borders before stopping.
+const ROUL = (() => {
+  const n = 400, a = 0.08, p = 2.2, v = [], c = [0];
+  for (let i = 0; i <= n; i++) { const t = i / n; v.push(t < a ? t / a : Math.pow((1 - t) / (1 - a), p)); }
+  for (let i = 1; i <= n; i++) c.push(c[i - 1] + (v[i - 1] + v[i]) / 2);
+  return c.map(x => x / c[n]);
+})();
+const rouletteEase = k => { const x = clamp(k, 0, 1) * 400, i = Math.min(399, Math.floor(x)); return ROUL[i] + (ROUL[i + 1] - ROUL[i]) * (x - i); };
 const easeInOut = t => t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
-const easeOutQuart = t => 1 - Math.pow(1 - t, 4);
 function normRot() { rot[0] = ((rot[0] + 540) % 360) - 180; }
 function zoomFor(o) {
   if (!o) return 1;
@@ -385,12 +396,9 @@ function animateTo(lon, lat, z1, opt = {}) {
     step(t) {
       const k = Math.min(1, (t - start) / dur);
       if (spins) {
-        rot[0] = l0 + dl * easeOutQuart(k);
-        rot[1] = p0 + (p1 - p0) * easeInOut(k);
-        const zOut = Math.min(z0, 1);
-        if (k < 0.25) zoom = Math.exp(Math.log(z0) + (Math.log(zOut) - Math.log(z0)) * easeInOut(k / 0.25));
-        else if (k < 0.7) zoom = zOut;
-        else zoom = Math.exp(Math.log(zOut) + (lz1 - Math.log(zOut)) * easeInOut((k - 0.7) / 0.3));
+        rot[0] = l0 + dl * rouletteEase(k);
+        rot[1] = p0 + (p1 - p0) * easeInOut(Math.min(1, k / 0.7));
+        zoom = Math.exp(lz0 + (lz1 - lz0) * easeInOut(Math.min(1, k / 0.15)));
       } else {
         const e = easeInOut(k);
         rot[0] = l0 + dl * e; rot[1] = p0 + (p1 - p0) * e;
@@ -431,7 +439,7 @@ function frame(t) {
     rot[0] += dt * 0.0045 / Math.max(1, zoom * 0.8);
     dirty = true;
   }
-  if (spinning && frameN % 3 === 0) {
+  if (spinPhase === 'spin' && !needleMask && frameN % 3 === 0) {
     const f = countryAt(center());
     const n = f ? (placeById.get(f.id) || {}).n || '' : '海の上';
     if (n !== needleName) { needleName = n; $('#readout').textContent = '▼ ' + n; }
@@ -447,6 +455,7 @@ let drag = null, pinch = null;
 const now = () => performance.now();
 function stopMotion() { if (anim && !spinning) anim = null; vel = null; lastInteract = now(); }
 canvas.addEventListener('pointerdown', e => {
+  lastPointer = now();
   if (spinning) return;
   canvas.setPointerCapture(e.pointerId);
   pointers.set(e.pointerId, { x: e.offsetX, y: e.offsetY });
@@ -613,7 +622,6 @@ qInput.addEventListener('blur', () => setTimeout(() => { sugg.hidden = true; }, 
 const recent = [];
 const gsearch = q => `https://www.google.com/search?q=${encodeURIComponent(q)}`;
 function select(o, opt = {}) {
-  if (o !== landedObj) hideLanded();
   sel = o;
   const hi = recent.indexOf(o); if (hi >= 0) recent.splice(hi, 1);
   recent.unshift(o); if (recent.length > 7) recent.pop();
@@ -674,16 +682,36 @@ document.querySelectorAll('#target-seg button').forEach(b => b.onclick = () => {
   target = b.dataset.t;
   document.querySelectorAll('#target-seg button').forEach(x => x.setAttribute('aria-pressed', String(x === b)));
 });
-function spinTo(o, zoomTarget, done) {
-  spinning = true; needleName = ''; hideTip(); setHover(null);
-  $('#readout').hidden = false; $('#readout').textContent = '▼';
+let spinToken = 0, lastPointer = 0;
+// Spin to o: roulette spin (onLand fires when it stops), zoom onto the spot,
+// then hold on the map for HOLD_MS before onDone.
+function spinTo(o, zoomTarget, opt = {}) {
+  const tok = ++spinToken;
+  spinning = true; spinPhase = 'spin'; needleName = ''; needleMask = !!opt.mask;
+  hideTip(); setHover(null);
+  $('#readout').hidden = false; $('#readout').textContent = needleMask ? '▼ ？？？' : '▼';
   $('#spin-btn').disabled = true;
   vel = null;
-  animateTo(o.lp[0], o.lp[1], zoomTarget, {
-    spins: REDUCED ? 0 : 2, dur: SPIN_MS,
+  animateTo(o.lp[0], o.lp[1], Math.min(zoom, 1), {
+    spins: REDUCED ? 0 : 3, dur: SPIN_MS,
     done: () => {
-      spinning = false; $('#readout').hidden = true; $('#spin-btn').disabled = false;
-      lastInteract = now(); dirty = true; done && done();
+      if (tok !== spinToken) return;
+      spinPhase = 'zoom';
+      if (!needleMask) { const f = countryAt(center()); $('#readout').textContent = '▼ ' + (f ? (placeById.get(f.id) || {}).n || '' : (o.n || '海の上')); }
+      if (opt.onLand) opt.onLand();
+      animateTo(o.lp[0], o.lp[1], zoomTarget, {
+        dur: ZOOM_MS,
+        done: () => {
+          if (tok !== spinToken) return;
+          spinning = false; spinPhase = ''; $('#readout').hidden = true;
+          lastInteract = now(); dirty = true;
+          setTimeout(() => {
+            if (tok !== spinToken) return;
+            $('#spin-btn').disabled = false;
+            if (opt.onDone) opt.onDone();
+          }, HOLD_MS);
+        }
+      });
     }
   });
 }
@@ -694,41 +722,32 @@ function shuffle() {
   do {
     o = pickCity ? D.cities[Math.floor(Math.random() * D.cities.length)] : shufflePlaces[Math.floor(Math.random() * shufflePlaces.length)];
   } while (o === sel);
-  sel = null; dirty = true; hideLanded();
+  sel = null; dirty = true;
   $('#view-explore').innerHTML = `<div class="pane"><p class="eyebrow">シャッフル中</p><h2 class="pname">…</h2><p class="lead">地球儀が止まった場所の郷土料理と豆知識を表示します。</p></div>`;
-  spinTo(o, zoomFor(o), () => { select(o); if (isNarrow()) showLanded(o); });
+  const started = now();
+  spinTo(o, zoomFor(o), {
+    onLand: () => select(o),
+    // phones: after the pause on the map, move down to the dishes unless the viewer started exploring the globe
+    onDone: () => { if (isNarrow() && lastPointer < started && mode === 'explore' && sel === o) revealPanel(); }
+  });
 }
 const isNarrow = () => innerWidth < 960;
 function revealPanel() { $('#panel').scrollIntoView({ behavior: REDUCED ? 'auto' : 'smooth', block: 'start' }); }
-// On phones the panel sits below the globe. Keep the landing spot on screen and
-// let the viewer choose when to scroll down, instead of scrolling away at once.
-let landedObj = null;
-function showLanded(o) {
-  landedObj = o;
-  const isCity = o.type === 'city';
-  $('#landed-sub').textContent = isCity ? `都市 · ${o.country.n}` : `${o.reg || ''} · ${o.un ? '国' : '地域'}`;
-  $('#landed-name').textContent = o.n;
-  $('#landed-dish').textContent = o.d && o.d.length ? '郷土料理: ' + o.d.slice(0, 3).map(d => d[0]).join('・') : '';
-  $('#landed').hidden = false;
-}
-function hideLanded() { landedObj = null; const el = $('#landed'); if (el) el.hidden = true; }
-$('#landed-go').onclick = () => { hideLanded(); revealPanel(); };
-$('#landed-x').onclick = hideLanded;
-// Quiz and battle: after the globe stops, bring the question card up from below,
+// Quiz and battle on phones: once the question appears, bring its card up from below,
 // aligned to the bottom edge so the pinned spot stays visible above it.
 function revealCard(sel) {
-  setTimeout(() => {
+  requestAnimationFrame(() => {
     const el = document.querySelector(sel); if (!el) return;
     const tall = el.getBoundingClientRect().height > innerHeight * 0.6;
     el.scrollIntoView({ behavior: REDUCED ? 'auto' : 'smooth', block: tall ? 'start' : 'end' });
-  }, REDUCED ? 0 : 900);
+  });
 }
 $('#spin-btn').onclick = () => { if (mode === 'explore') shuffle(); else if (mode === 'quiz') nextQuestion(); };
 
 /* ---------------- modes ---------------- */
 function setMode(m) {
   if (m === mode) return;
-  mode = m; hideLanded();
+  mode = m;
   ['explore', 'quiz', 'battle'].forEach(k => {
     $('#tab-' + k).setAttribute('aria-selected', String(m === k));
     $('#view-' + k).hidden = m !== k;
@@ -893,10 +912,15 @@ function nextQuestion() {
   updateSpinLabel(); renderQuiz();
   const z = SQ.hideLoc ? 1 : Math.min(zoomFor(q.loc), 4.2);
   const dest = SQ.hideLoc ? { lp: [q.loc.lp[0] + (Math.random() - 0.5) * 60, clamp(q.loc.lp[1] + (Math.random() - 0.5) * 36, -70, 75)] } : q.loc;
-  spinTo(dest, z, () => {
-    SQ.state = 'asking'; SQ.view.state = 'asking'; updateSpinLabel(); renderQuiz();
-    if (isNarrow()) revealCard('#view-quiz .qcard');
-    const inp = $('#ans'); if (inp && innerWidth >= 960) inp.focus({ preventScroll: true });
+  spinTo(dest, z, {
+    mask: true,
+    onLand: () => { SQ.view.state = 'asking'; dirty = true; },
+    onDone: () => {
+      if (SQ.state !== 'spinning') return;
+      SQ.state = 'asking'; updateSpinLabel(); renderQuiz();
+      if (isNarrow()) revealCard('#view-quiz .qcard');
+      const inp = $('#sans'); if (inp && !isNarrow()) inp.focus({ preventScroll: true });
+    }
   });
 }
 function soloAnswer(text, picked) {
@@ -1212,7 +1236,7 @@ function hostNext() {
   const r = B.round + 1;
   send({ k: 'q', round: r, total: B.total, q: toWire(q, B.settings.mode === 'choice' ? makeChoices(q) : null), timeLimit: B.settings.time });
   clearTimeout(B.hostTimer);
-  B.hostTimer = setTimeout(() => hostReveal(r), SPIN_MS + B.settings.time * 1000 + 2500);
+  B.hostTimer = setTimeout(() => hostReveal(r), SPIN_TOTAL + B.settings.time * 1000 + 2500);
 }
 function onQuestion(m, elapsed) {
   B.round = m.round; B.total = m.total; B.qp = m.q; B.q = fromWire(m.q); B.timeLimit = m.timeLimit;
@@ -1231,7 +1255,7 @@ function onQuestion(m, elapsed) {
     if (isNarrow()) revealCard('#view-battle .qcard');
   };
   if (elapsed > 0) { flyTo(B.q.loc, { zoom: Math.min(zoomFor(B.q.loc), 4.2), dur: 500, done: begin }); }
-  else spinTo(B.q.loc, Math.min(zoomFor(B.q.loc), 4.2), begin);
+  else spinTo(B.q.loc, Math.min(zoomFor(B.q.loc), 4.2), { mask: true, onLand: () => { if (B.round === r) { B.view.state = 'asking'; dirty = true; } }, onDone: begin });
 }
 function tickTimer() {
   if (B.phase !== 'asking') { clearInterval(B.tick); return; }
