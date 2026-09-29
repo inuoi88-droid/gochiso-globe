@@ -919,7 +919,7 @@ function nextQuestion() {
       if (SQ.state !== 'spinning') return;
       SQ.state = 'asking'; updateSpinLabel(); renderQuiz();
       if (isNarrow()) revealCard('#view-quiz .qcard');
-      const inp = $('#sans'); if (inp && !isNarrow()) inp.focus({ preventScroll: true });
+      focusAnswer();
     }
   });
 }
@@ -1026,11 +1026,35 @@ function rerenderQuiz() {
   const s = $('#sq-settings'), a = $('#sq-add');
   const open = s ? s.open : true; SQ.addOpen = a ? a.open : SQ.addOpen;
   const val = ($('#sans') || {}).value || '', ta = ($('#add-text') || {}).value || '';
+  const inTextarea = document.activeElement && document.activeElement.id === 'add-text';
   renderQuiz();
   if ($('#sq-settings')) $('#sq-settings').open = open;
   if ($('#sans')) $('#sans').value = val;
   if ($('#add-text')) $('#add-text').value = ta;
+  if (!inTextarea) focusAnswer();
 }
+// Typed answers on a computer: put the cursor in the answer box as soon as a question
+// is shown, and send stray keystrokes there. Phones are left alone so the keyboard
+// does not cover the globe.
+const finePointer = matchMedia('(hover: hover) and (pointer: fine)');
+function answerInput() {
+  if (mode === 'quiz' && SQ.state === 'asking') return $('#sans');
+  if (mode === 'battle' && B.phase === 'asking' && !B.myAns) return $('#bans');
+  return null;
+}
+function focusAnswer() {
+  if (!finePointer.matches) return;
+  const inp = answerInput();
+  if (inp && document.activeElement !== inp) inp.focus({ preventScroll: true });
+}
+document.addEventListener('keydown', e => {
+  if (e.ctrlKey || e.metaKey || e.altKey || e.isComposing) return;
+  const t = e.target;
+  if (t && t.closest && t.closest('input,textarea,select,[contenteditable="true"]')) return;
+  if (!(e.key.length === 1 || e.key === 'Process' || e.key === 'Backspace')) return;
+  const inp = answerInput();
+  if (inp) inp.focus({ preventScroll: true });
+}, true);
 function addQuestions(text, label) {
   const r = buildQuestions(text, 't');
   if (!r.qs.length) { SQ.addMsg = `${label}: 追加できる問題がありませんでした${r.errors.length ? '(' + r.errors[0] + ')' : ''}`; rerenderQuiz(); return; }
@@ -1251,7 +1275,7 @@ function onQuestion(m, elapsed) {
     B.phase = 'asking'; B.view.state = 'asking'; B.tStart = now() - elapsed;
     renderBattle(); dirty = true;
     clearInterval(B.tick); B.tick = setInterval(tickTimer, 200); tickTimer();
-    const inp = $('#bans'); if (inp && innerWidth >= 960) inp.focus({ preventScroll: true });
+    focusAnswer();
     if (isNarrow()) revealCard('#view-battle .qcard');
   };
   if (elapsed > 0) { flyTo(B.q.loc, { zoom: Math.min(zoomFor(B.q.loc), 4.2), dur: 500, done: begin }); }
@@ -1409,7 +1433,9 @@ function renderBattle() {
       <div class="btnrow">${B.isHost ? '<button class="btn brass" id="b-again">もう一度遊ぶ</button>' : ''}<button class="btn" id="b-leave">部屋を出る</button></div>
       ${B.isHost ? '' : '<p class="note">ホストがもう一度遊ぶを押すと、部屋に戻ります。</p>'}${errHTML}`;
   }
+  const prevAns = ($('#bans') || {}).value || '';
   v.innerHTML = `<div class="pane">${html}</div>`;
+  if ($('#bans')) { $('#bans').value = prevAns; focusAnswer(); }
 }
 function setName(n) { n = String(n || '').trim().slice(0, 12); if (!n) return; B.me.name = n; store.set('name', n); if (B.net) sayHello(false); }
 $('#view-battle').addEventListener('click', e => {
