@@ -1,0 +1,84 @@
+<div class="app">
+  <header class="bar">
+    <div class="brand">
+      <svg width="34" height="34" viewBox="0 0 34 34" aria-hidden="true">
+        <circle cx="17" cy="15" r="11" fill="var(--sea-1)" stroke="var(--coast)" stroke-width="1.2"/>
+        <ellipse cx="17" cy="15" rx="4.6" ry="11" fill="none" stroke="var(--coast)" stroke-width=".9"/>
+        <path d="M6 15h22" stroke="var(--coast)" stroke-width=".9"/>
+        <path d="M4.2 15a12.8 12.8 0 0 0 25.6 0" fill="none" stroke="var(--brass-hi)" stroke-width="2"/>
+        <path d="M17 28v4M12 32h10" stroke="var(--brass-hi)" stroke-width="2" stroke-linecap="round"/>
+      </svg>
+      <div>
+        <h1>ごちそう地球儀</h1>
+        <p>回して、止まった国の料理と豆知識を知る</p>
+      </div>
+    </div>
+    <div class="tabs" role="tablist" aria-label="モード">
+      <button role="tab" id="tab-explore" aria-selected="true" aria-controls="view-explore">探検</button>
+      <button role="tab" id="tab-quiz" aria-selected="false" aria-controls="view-quiz">クイズ</button>
+      <button role="tab" id="tab-battle" aria-selected="false" aria-controls="view-battle">対戦</button>
+    </div>
+  </header>
+
+  <main class="layout">
+    <section class="stage" id="stage" aria-label="地球儀">
+      <canvas id="globe" tabindex="0" aria-label="回せる地球儀。ドラッグで回転、ホイールやピンチで拡大、クリックで国や都市を選択"></canvas>
+
+      <div class="ov top">
+        <div class="search">
+          <svg width="15" height="15" viewBox="0 0 16 16" aria-hidden="true"><circle cx="7" cy="7" r="5.2" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M11 11l3.6 3.6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+          <input id="q" type="search" placeholder="国名・都市名で探す" autocomplete="off" aria-label="国名・都市名で探す" aria-controls="suggest">
+          <ul class="suggest" id="suggest" role="listbox" hidden></ul>
+        </div>
+        <div class="toggles">
+          <button class="tog" id="t-labels" aria-pressed="true">国名</button>
+          <button class="tog" id="t-cities" aria-pressed="true">都市</button>
+          <button class="tog" id="t-auto" aria-pressed="true">自動回転</button>
+        </div>
+      </div>
+
+      <div class="ov readout" id="readout" hidden></div>
+      <div class="ov tip" id="tip" hidden></div>
+      <div class="ov toast" id="toast" hidden></div>
+
+      <div class="ov zoom">
+        <button id="z-in" aria-label="拡大">＋</button>
+        <button id="z-out" aria-label="縮小">−</button>
+        <button id="z-home" aria-label="全体を表示">
+          <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6" fill="none" stroke="currentColor" stroke-width="1.5"/><ellipse cx="8" cy="8" rx="2.6" ry="6" fill="none" stroke="currentColor" stroke-width="1.2"/></svg>
+        </button>
+      </div>
+
+      <div class="ov spin" id="spin-wrap">
+        <button class="spin-btn" id="spin-btn">
+          <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true"><path d="M15 9a6 6 0 1 1-2-4.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M13.6 1.6v3.6H10" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <span id="spin-label">シャッフル</span>
+        </button>
+        <div class="seg" id="target-seg" role="group" aria-label="シャッフルの対象">
+          <button data-t="both" aria-pressed="true">国と都市</button>
+          <button data-t="country" aria-pressed="false">国</button>
+          <button data-t="city" aria-pressed="false">都市</button>
+        </div>
+      </div>
+
+      <div class="ov coords mono" id="coords"></div>
+    </section>
+
+    <aside class="panel" id="panel">
+      <div id="view-explore" role="tabpanel" aria-labelledby="tab-explore"></div>
+      <div id="view-quiz" role="tabpanel" aria-labelledby="tab-quiz" hidden></div>
+      <div id="view-battle" role="tabpanel" aria-labelledby="tab-battle" hidden></div>
+      <div class="foot">
+        <p class="note">地図: Natural Earth 1:50m(world-atlas)。国境線は実効支配線にもとづき、帰属に争いのある地域は斜線で示しています。料理の作り方はGoogle検索が新しいタブで開きます。</p>
+      </div>
+    </aside>
+  </main>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.9.0/d3.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/topojson-client@3.1.0/dist/topojson-client.min.js"></script>
+<script>window.GLOBE_DATA = __DATA__;</script>
+<script>window.GLOBE_QUIZ = __QUIZ__;</script>
+<script>
+__APP_JS__
+</script>

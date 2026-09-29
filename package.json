@@ -1,0 +1,19 @@
+{
+  "name": "gochiso-globe",
+  "private": true,
+  "description": "ごちそう地球儀 — 回せる地球儀、郷土料理と豆知識、国クイズ、オンライン対戦",
+  "scripts": {
+    "map": "node build/simplify.js 0.3",
+    "data": "node build/build.js",
+    "site": "python3 build/assemble.py",
+    "build": "node build/build.js && python3 build/assemble.py"
+  },
+  "devDependencies": {
+    "d3": "7.9.0",
+    "polylabel": "^1.1.0",
+    "topojson-client": "3.1.0",
+    "topojson-simplify": "^3.0.3",
+    "world-atlas": "^2.0.2",
+    "world-countries": "^5.1.0"
+  }
+}
