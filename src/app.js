@@ -886,11 +886,93 @@ function hintText(q, lv) {
 const stars = d => '★'.repeat(d) + '☆'.repeat(5 - d);
 const locObj = loc => loc.city || loc.place;
 
+/* ================= 早応え: sound, intro, gradual reading ================= */
+// Sounds are synthesized with Web Audio, so no files are needed. Browsers only allow
+// audio after the viewer has tapped or typed, so the context is unlocked on the first gesture.
+const SFX = {
+  ctx: null, on: store.get('sfx', true),
+  unlock() {
+    if (!this.on) return;
+    try {
+      if (!this.ctx) this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+      if (this.ctx.state === 'suspended') this.ctx.resume();
+    } catch (e) { this.ctx = null; }
+  },
+  tone(f, t0, dur, type, gain) {
+    const c = this.ctx, o = c.createOscillator(), g = c.createGain();
+    o.type = type; o.frequency.setValueAtTime(f, t0);
+    g.gain.setValueAtTime(0.0001, t0);
+    g.gain.exponentialRampToValueAtTime(gain, t0 + 0.012);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+    o.connect(g); g.connect(c.destination);
+    o.start(t0); o.stop(t0 + dur + 0.03);
+  },
+  play(name) {
+    if (!this.on) return;
+    this.unlock();
+    const c = this.ctx; if (!c) return;
+    const t = c.currentTime + 0.03;
+    if (name === 'question') {          // "ジャジャン!" — a pickup note, then a bright chord
+      this.tone(392.0, t, 0.11, 'square', 0.07); this.tone(784.0, t, 0.11, 'triangle', 0.10);
+      [523.25, 659.25, 783.99, 1046.5].forEach((f, i) => this.tone(f, t + 0.13, 0.62, i % 2 ? 'triangle' : 'square', i % 2 ? 0.11 : 0.05));
+      this.tone(130.8, t + 0.13, 0.45, 'sine', 0.22);
+    } else if (name === 'ok') {         // "ピンポン"
+      this.tone(1318.5, t, 0.16, 'sine', 0.2); this.tone(1046.5, t + 0.17, 0.42, 'sine', 0.2);
+    } else if (name === 'ng') {         // "ブッブー"
+      this.tone(155, t, 0.16, 'sawtooth', 0.09); this.tone(155, t + 0.22, 0.42, 'sawtooth', 0.09);
+    }
+  }
+};
+['pointerdown', 'touchend', 'keydown'].forEach(ev => document.addEventListener(ev, () => SFX.unlock(), { capture: true, passive: true }));
+bindToggle('#t-sfx', () => SFX.on, v => { SFX.on = v; store.set('sfx', v); if (v) { SFX.unlock(); SFX.play('ok'); } });
+
+// The question text appears a character at a time, like it is being read aloud.
+// Answers are accepted while it is still appearing (早応え).
+const READ_SPEEDS = { slow: 170, normal: 115, fast: 70 };
+const READ_LABEL = { slow: 'ゆっくり', normal: 'ふつう', fast: 'はやい' };
+const INTRO_MS = REDUCED ? 600 : 1600;   // jingle, then a beat of silence before reading
+function readPlan(text, msPerChar) {
+  const chars = [...text], at = []; let t = 0;
+  for (const ch of chars) {
+    at.push(t);
+    t += msPerChar + ('、，,'.includes(ch) ? msPerChar * 2 : '。．！？!?'.includes(ch) ? msPerChar * 3 : 0);
+  }
+  return { chars, at, total: t };
+}
+function shownCount(plan, elapsed) {
+  let n = 0; while (n < plan.chars.length && plan.at[n] <= elapsed) n++;
+  return n;
+}
+function readingHTML(R, id) {
+  if (!R) return `<p class="qtext intro" id="${id}"><span class="mondai">問題</span></p>`;
+  const n = R.done ? R.plan.chars.length : shownCount(R.plan, now() - R.start);
+  const end = R.done || n >= R.plan.chars.length;
+  return `<p class="qtext reading" id="${id}" data-n="${n}">${esc(R.plan.chars.slice(0, n).join(''))}${end ? '' : '<span class="caret"></span>'}</p>`;
+}
+let readerTimer = 0;
+function startReader() { if (!readerTimer) readerTimer = setInterval(readerTick, 40); }
+function readerTick() {
+  let active = false;
+  for (const R of [SQ.read, B.read]) {
+    if (!R || R.done) continue;
+    const n = shownCount(R.plan, now() - R.start);
+    if (n >= R.plan.chars.length) R.done = true; else active = true;
+    const el = document.getElementById(R.elId);
+    if (el && el.dataset.n !== String(n)) {
+      el.dataset.n = n;
+      el.innerHTML = esc(R.plan.chars.slice(0, n).join('')) + (R.done ? '' : '<span class="caret"></span>');
+    }
+  }
+  if (!active) { clearInterval(readerTimer); readerTimer = 0; }
+}
+const locTag = q => !q.hideName && q.loc.name ? `<span class="tag">場所: ${esc(q.loc.name)}</span>` : '';
+
 /* ================= solo quiz ================= */
 const SQ = {
   diffs: new Set([1, 2, 3, 4, 5]), regs: new Set(REGIONS), mode: 'input', hideLoc: false,
   used: new Set(), state: 'idle', cur: null, n: 0, correct: 0, streak: 0, best: store.get('best', 0),
-  view: idleView(), addOpen: false, addMsg: ''
+  view: idleView(), addOpen: false, addMsg: '',
+  phase: '', read: null, token: 0, speed: store.get('speed', 'normal')
 };
 function filterPool(diffs, regs) {
   const all = regs.size === REGIONS.length;
@@ -906,25 +988,33 @@ function nextQuestion() {
   const q = pool[Math.floor(Math.random() * pool.length)];
   SQ.used.add(q.id);
   SQ.n++;
-  SQ.cur = { q, hint: 0, ok: null, given: '', choices: SQ.mode === 'choice' ? makeChoices(q) : null };
-  SQ.state = 'spinning';
+  SQ.cur = { q, hint: 0, ok: null, given: '', choices: SQ.mode === 'choice' ? makeChoices(q) : null, at: null, frac: null };
+  SQ.state = 'spinning'; SQ.phase = ''; SQ.read = null;
+  const tok = ++SQ.token;
   SQ.view = { state: 'spinning', loc: q.loc, hideName: q.hideName, hideLoc: SQ.hideLoc, ok: null };
   updateSpinLabel(); renderQuiz();
   const z = SQ.hideLoc ? 1 : Math.min(zoomFor(q.loc), 4.2);
   const dest = SQ.hideLoc ? { lp: [q.loc.lp[0] + (Math.random() - 0.5) * 60, clamp(q.loc.lp[1] + (Math.random() - 0.5) * 36, -70, 75)] } : q.loc;
   spinTo(dest, z, {
-    mask: true,
+    mask: q.hideName,
     onLand: () => { SQ.view.state = 'asking'; dirty = true; },
     onDone: () => {
-      if (SQ.state !== 'spinning') return;
-      SQ.state = 'asking'; updateSpinLabel(); renderQuiz();
+      if (SQ.state !== 'spinning' || tok !== SQ.token) return;
+      // "問題!" and a beat of silence, then the text starts to appear
+      SQ.state = 'asking'; SQ.phase = 'intro'; updateSpinLabel(); renderQuiz();
+      SFX.play('question');
       if (isNarrow()) revealCard('#view-quiz .qcard');
-      focusAnswer();
+      setTimeout(() => {
+        if (tok !== SQ.token || SQ.state !== 'asking') return;
+        SQ.phase = 'reading';
+        SQ.read = { plan: readPlan(q.text, READ_SPEEDS[SQ.speed] || READ_SPEEDS.normal), start: now(), elId: 's-qtext', done: false };
+        rerenderQuiz(); startReader(); focusAnswer();
+      }, INTRO_MS);
     }
   });
 }
 function soloAnswer(text, picked) {
-  if (SQ.state !== 'asking') return;
+  if (SQ.state !== 'asking' || SQ.phase !== 'reading') return;
   const q = SQ.cur.q;
   let ok;
   if (picked != null) ok = norm(picked) === norm(q.alts[0]);
@@ -937,6 +1027,13 @@ function soloAnswer(text, picked) {
 function finishSolo(ok, given) {
   const q = SQ.cur.q;
   SQ.cur.ok = ok; SQ.cur.given = given;
+  if (SQ.read) {
+    SQ.cur.at = now() - SQ.read.start;
+    SQ.cur.frac = SQ.read.done ? 1 : shownCount(SQ.read.plan, SQ.cur.at) / SQ.read.plan.chars.length;
+    SQ.cur.after = SQ.cur.at - SQ.read.plan.total;
+    SQ.read.done = true;
+  }
+  SFX.play(ok ? 'ok' : 'ng');
   if (ok) { SQ.correct++; SQ.streak++; if (SQ.streak > SQ.best) { SQ.best = SQ.streak; store.set('best', SQ.best); } }
   else SQ.streak = 0;
   SQ.state = 'answered'; SQ.view.state = 'answered'; SQ.view.ok = ok;
@@ -974,6 +1071,7 @@ function renderQuiz() {
     <div class="set"><label class="lbl">難易度</label><div class="chips">${chipsHTML('d', SQ.diffs, [1, 2, 3, 4, 5], false)}</div></div>
     <div class="set"><label class="lbl">地域</label><div class="chips">${chipsHTML('r', SQ.regs, REGIONS, true)}</div></div>
     <div class="set"><label class="lbl">答え方</label><div class="seg" style="align-self:flex-start"><button data-m="input" aria-pressed="${SQ.mode === 'input'}">入力</button><button data-m="choice" aria-pressed="${SQ.mode === 'choice'}">4択</button></div></div>
+    <div class="set"><label class="lbl">問題文の表示速度</label><div class="seg" style="align-self:flex-start">${Object.keys(READ_SPEEDS).map(k => `<button data-sp="${k}" aria-pressed="${SQ.speed === k}">${READ_LABEL[k]}</button>`).join('')}</div></div>
     <div class="set"><label class="switch"><input type="checkbox" id="set-hide" ${SQ.hideLoc ? 'checked' : ''}> 止まった場所を隠す(上級)</label></div>
   </details>`;
   const addBox = `<details class="settings" id="sq-add"${SQ.addOpen ? ' open' : ''}>
@@ -994,16 +1092,18 @@ function renderQuiz() {
   const cur = SQ.cur;
   if (SQ.state === 'idle' || !cur) {
     card = `<div class="qcard">
-      <p class="lead">地球儀を回して、止まった場所についての問題に答えます。青いピンの場所と問題文をヒントに当ててください。</p>
+      <p class="lead">地球儀を回して、止まった場所についての問題に答えます。問題文は読み上げるように少しずつ表示されるので、分かった時点で答えてください(早応え)。</p>
       <div class="btnrow"><button class="btn brass" id="q-start">回して出題</button><button class="btn" id="q-battle">友達と対戦する</button></div>
       <p class="note">全${allQs().length}問</p></div>`;
   } else if (SQ.state === 'spinning') {
     card = `<div class="qcard"><p class="qmeta"><span>第${SQ.n}問</span></p><p class="qtext">地球儀が回っています…</p></div>`;
   } else {
     const q = cur.q;
-    const meta = `<div class="qmeta"><span>第${SQ.n}問</span><span class="stars" aria-label="難易度${q.diff}">${stars(q.diff)}</span>${q.genre ? `<span class="tag">${esc(q.genre)}</span>` : ''}${q.type !== '国名' ? `<span class="tag">答え: ${esc(q.type)}</span>` : ''}${SQ.hideLoc ? '<span class="tag">位置なし</span>' : ''}</div>`;
-    if (SQ.state === 'asking') {
-      card = `<div class="qcard">${meta}<p class="qtext">${esc(q.text)}</p>${answerUI(q, cur.choices, 's')}
+    const meta = `<div class="qmeta"><span>第${SQ.n}問</span><span class="stars" aria-label="難易度${q.diff}">${stars(q.diff)}</span>${q.genre ? `<span class="tag">${esc(q.genre)}</span>` : ''}${q.type !== '国名' ? `<span class="tag">答え: ${esc(q.type)}</span>` : ''}${locTag(q)}${SQ.hideLoc ? '<span class="tag">位置なし</span>' : ''}</div>`;
+    if (SQ.state === 'asking' && SQ.phase !== 'reading') {
+      card = `<div class="qcard">${meta}${readingHTML(null, 's-qtext')}</div>`;
+    } else if (SQ.state === 'asking') {
+      card = `<div class="qcard">${meta}${readingHTML(SQ.read, 's-qtext')}${answerUI(q, cur.choices, 's')}
         ${cur.hint ? `<p class="hint">ヒント: ${esc(hintText(q, cur.hint))}</p>` : ''}
         <div class="btnrow"><button class="btn" id="q-hint" ${cur.hint >= maxHint(q) ? 'disabled' : ''}>ヒント${cur.hint ? 'をもう1つ' : ''}</button><button class="btn" id="q-giveup">わからない</button></div></div>`;
     } else {
@@ -1013,6 +1113,7 @@ function renderQuiz() {
           <p class="verdict ${cur.ok ? 'ok' : 'ng'}">${cur.ok ? '正解' : '残念'}</p>
           <p class="answer">答え <b>${esc(q.alts[0])}</b> ${q.type === '国名' && q.loc.place && q.loc.place.en ? `<span class="pen" style="display:inline">${esc(q.loc.place.en)}</span>` : ''}</p>
           ${!cur.ok && cur.given ? `<p class="expl">あなたの答え: ${esc(cur.given)}</p>` : ''}
+          ${cur.frac != null && cur.given ? `<p class="expl">${cur.frac < 1 ? `問題文の${Math.max(1, Math.round(cur.frac * 100))}%で回答` : `読み終わってから${(Math.max(0, cur.after) / 1000).toFixed(1)}秒で回答`}</p>` : ''}
           ${cur.hint ? `<p class="expl">ヒント${cur.hint}回使用</p>` : ''}
         </div>
         ${q.expl ? `<p class="expl">${esc(q.expl)}</p>` : ''}
@@ -1038,8 +1139,8 @@ function rerenderQuiz() {
 // does not cover the globe.
 const finePointer = matchMedia('(hover: hover) and (pointer: fine)');
 function answerInput() {
-  if (mode === 'quiz' && SQ.state === 'asking') return $('#sans');
-  if (mode === 'battle' && B.phase === 'asking' && !B.myAns) return $('#bans');
+  if (mode === 'quiz' && SQ.state === 'asking' && SQ.phase === 'reading') return $('#sans');
+  if (mode === 'battle' && B.phase === 'asking' && B.stage === 'reading' && !B.myAns) return $('#bans');
   return null;
 }
 function focusAnswer() {
@@ -1080,12 +1181,13 @@ $('#view-quiz').addEventListener('click', e => {
   const t = e.target;
   if (t.closest('#q-start') || t.closest('#q-next')) { nextQuestion(); return; }
   if (t.closest('#q-battle')) { setMode('battle'); return; }
-  if (t.closest('#q-giveup')) { if (SQ.state === 'asking') finishSolo(false, ''); return; }
+  if (t.closest('#q-giveup')) { if (SQ.state === 'asking') { SQ.token++; finishSolo(false, ''); } return; }
   if (t.closest('#q-hint')) { if (SQ.state === 'asking' && SQ.cur.hint < maxHint(SQ.cur.q)) { SQ.cur.hint++; rerenderQuiz(); } return; }
   if (t.closest('#q-explore')) { const o = locObj(SQ.cur.q.loc); setMode('explore'); select(o); return; }
   if (t.closest('#add-paste')) { const txt = ($('#add-text') || {}).value || ''; if (!txt.trim()) { toast('行を貼り付けてください'); return; } $('#add-text').value = ''; addQuestions(txt, '貼り付け'); return; }
   if (t.closest('#add-clear')) { QUIZ.extraText = ''; QUIZ.extra = []; QUIZ.extraErr = []; store.set('extra-quiz', ''); SQ.addMsg = '追加した問題を消しました'; rerenderQuiz(); return; }
   const cb = t.closest('[data-sc]'); if (cb && SQ.state === 'asking') { soloAnswer('', SQ.cur.choices[+cb.dataset.sc]); return; }
+  const sp = t.closest('[data-sp]'); if (sp) { SQ.speed = sp.dataset.sp; store.set('speed', SQ.speed); rerenderQuiz(); return; }
   const d = t.closest('[data-d]'); if (d) { toggleIn(SQ.diffs, [1, 2, 3, 4, 5], +d.dataset.d, false); rerenderQuiz(); return; }
   const r = t.closest('[data-r]'); if (r) { toggleIn(SQ.regs, REGIONS, r.dataset.r, true); rerenderQuiz(); return; }
   const m = t.closest('[data-m]');
@@ -1137,7 +1239,8 @@ const B = {
   net: null, code: '', me: { id: rid(), name: store.get('name', '') || `プレイヤー${10 + Math.floor(Math.random() * 90)}` },
   isHost: false, hostId: null, peers: new Map(), names: new Map(), scores: new Map(),
   phase: 'lobby', err: '', status: '',
-  settings: { count: 10, time: 20, mode: 'choice', diffs: new Set([1, 2, 3, 4, 5]), regs: new Set(REGIONS) },
+  settings: { count: 10, time: 15, mode: 'choice', speed: 'normal', diffs: new Set([1, 2, 3, 4, 5]), regs: new Set(REGIONS) },
+  stage: '', read: null, allowed: 0, msPerChar: 115,
   round: 0, total: 0, q: null, qp: null, answers: new Map(), results: null, myAns: null,
   tStart: 0, timeLimit: 20, tick: 0, hostTimer: 0, hb: 0, used: new Set(), revealed: 0, view: idleView(), joinCode: ''
 };
@@ -1145,7 +1248,7 @@ const HB_MS = 4000, GONE_MS = 13000;
 function send(m) { if (B.net) B.net.send(Object.assign({ room: B.code, from: B.me.id }, m)); }
 const activeIds = () => [...B.peers.entries()].filter(([id, p]) => id === B.me.id || now() - p.last < GONE_MS).map(([id]) => id);
 const pname = id => (B.peers.get(id) || {}).name || B.names.get(id) || '退出したプレイヤー';
-function settingsWire() { const s = B.settings; return { count: s.count, time: s.time, mode: s.mode, diffs: [...s.diffs], regs: [...s.regs] }; }
+function settingsWire() { const s = B.settings; return { count: s.count, time: s.time, mode: s.mode, speed: s.speed, diffs: [...s.diffs], regs: [...s.regs] }; }
 async function connect(code, asHost) {
   leaveRoom(true);
   B.code = code; B.isHost = asHost; B.hostId = asHost ? B.me.id : null;
@@ -1221,14 +1324,14 @@ function onMsg(m) {
   }
 }
 function sendSync(to) {
-  const elapsed = B.phase === 'asking' ? now() - B.tStart : 0;
-  send({ k: 'sync', to, phase: B.phase, round: B.round, total: B.total, qp: B.qp, timeLimit: B.timeLimit, elapsed,
+  const elapsed = B.phase === 'asking' && B.stage === 'reading' ? now() - B.tStart : 0;
+  send({ k: 'sync', to, phase: B.phase, round: B.round, total: B.total, qp: B.qp, timeLimit: B.timeLimit, msPerChar: B.msPerChar, elapsed,
     scores: [...B.scores], names: [...B.names], results: B.results, settings: settingsWire() });
 }
 function applySync(m) {
   B.scores = new Map(m.scores || []); (m.names || []).forEach(([id, n]) => B.names.set(id, n));
   B.settingsView = m.settings;
-  if ((m.phase === 'asking' || m.phase === 'spinning') && m.qp) { onQuestion({ round: m.round, total: m.total, q: m.qp, timeLimit: m.timeLimit }, m.elapsed || 0); return; }
+  if ((m.phase === 'asking' || m.phase === 'spinning') && m.qp) { onQuestion({ round: m.round, total: m.total, q: m.qp, timeLimit: m.timeLimit, msPerChar: m.msPerChar }, m.elapsed || 0); return; }
   if (m.phase === 'reveal' && m.qp) { B.round = m.round; B.total = m.total; B.qp = m.qp; B.q = fromWire(m.qp); onReveal({ round: m.round, results: m.results || [], scores: m.scores, names: m.names }); return; }
   if (m.phase === 'end') { onEnd({ scores: m.scores, names: m.names }); return; }
   renderBattle();
@@ -1258,47 +1361,63 @@ function hostNext() {
   const q = pool[Math.floor(Math.random() * pool.length)];
   B.used.add(q.id);
   const r = B.round + 1;
-  send({ k: 'q', round: r, total: B.total, q: toWire(q, B.settings.mode === 'choice' ? makeChoices(q) : null), timeLimit: B.settings.time });
+  const msPerChar = READ_SPEEDS[B.settings.speed] || READ_SPEEDS.normal;
+  send({ k: 'q', round: r, total: B.total, q: toWire(q, B.settings.mode === 'choice' ? makeChoices(q) : null), timeLimit: B.settings.time, msPerChar });
   clearTimeout(B.hostTimer);
-  B.hostTimer = setTimeout(() => hostReveal(r), SPIN_TOTAL + B.settings.time * 1000 + 2500);
+  B.hostTimer = setTimeout(() => hostReveal(r), SPIN_TOTAL + INTRO_MS + readPlan(q.text, msPerChar).total + B.settings.time * 1000 + 2500);
 }
 function onQuestion(m, elapsed) {
   B.round = m.round; B.total = m.total; B.qp = m.q; B.q = fromWire(m.q); B.timeLimit = m.timeLimit;
-  B.answers = new Map(); B.myAns = null; B.results = null; B.err = '';
+  B.msPerChar = m.msPerChar || READ_SPEEDS.normal;
+  B.answers = new Map(); B.myAns = null; B.results = null; B.err = ''; B.stage = ''; B.read = null;
   B.phase = 'spinning';
   B.view = { state: 'spinning', loc: B.q.loc, hideName: B.q.hideName, hideLoc: false, ok: null };
   if (mode !== 'battle') setMode('battle');
   renderBattle();
   const r = m.round;
-  const begin = () => {
-    if (B.round !== r || B.phase !== 'spinning') return;
-    B.phase = 'asking'; B.view.state = 'asking'; B.tStart = now() - elapsed;
-    renderBattle(); dirty = true;
+  // reading starts at the same moment for everyone (after spin + intro); the clock and the
+  // speed bonus count from the start of reading
+  const startReading = () => {
+    if (B.round !== r || B.phase !== 'asking') return;
+    B.stage = 'reading';
+    const plan = readPlan(B.q.text, B.msPerChar);
+    B.tStart = now() - elapsed;
+    B.allowed = plan.total + B.timeLimit * 1000;
+    B.read = { plan, start: B.tStart, elId: 'b-qtext', done: false };
+    renderBattle(); startReader();
     clearInterval(B.tick); B.tick = setInterval(tickTimer, 200); tickTimer();
     focusAnswer();
+  };
+  const begin = () => {
+    if (B.round !== r || B.phase !== 'spinning') return;
+    B.phase = 'asking'; B.view.state = 'asking'; dirty = true;
+    if (elapsed > 0) { startReading(); if (isNarrow()) revealCard('#view-battle .qcard'); return; }
+    B.stage = 'intro'; renderBattle(); SFX.play('question');
     if (isNarrow()) revealCard('#view-battle .qcard');
+    setTimeout(startReading, INTRO_MS);
   };
   if (elapsed > 0) { flyTo(B.q.loc, { zoom: Math.min(zoomFor(B.q.loc), 4.2), dur: 500, done: begin }); }
-  else spinTo(B.q.loc, Math.min(zoomFor(B.q.loc), 4.2), { mask: true, onLand: () => { if (B.round === r) { B.view.state = 'asking'; dirty = true; } }, onDone: begin });
+  else spinTo(B.q.loc, Math.min(zoomFor(B.q.loc), 4.2), { mask: B.q.hideName, onLand: () => { if (B.round === r) { B.view.state = 'asking'; dirty = true; } }, onDone: begin });
 }
 function tickTimer() {
-  if (B.phase !== 'asking') { clearInterval(B.tick); return; }
-  const left = Math.max(0, B.timeLimit * 1000 - (now() - B.tStart));
+  if (B.phase !== 'asking' || B.stage !== 'reading') { clearInterval(B.tick); return; }
+  const left = Math.max(0, B.allowed - (now() - B.tStart));
   const s = Math.ceil(left / 1000);
   const el = $('#b-time'); if (el) el.textContent = s;
-  const bar = $('#b-bar'); if (bar) bar.style.width = (100 * left / (B.timeLimit * 1000)).toFixed(1) + '%';
+  const bar = $('#b-bar'); if (bar) bar.style.width = (100 * left / B.allowed).toFixed(1) + '%';
   const ro = $('#readout');
   if (mode === 'battle' && !spinning) { ro.hidden = false; ro.textContent = B.myAns ? '回答済み · 残り ' + s + '秒' : '残り ' + s + '秒'; }
   if (left <= 0 && !B.myAns) submitBattle('', null, true);
 }
 function submitBattle(text, picked, timeout) {
-  if (B.phase !== 'asking' || B.myAns) return;
+  if (B.phase !== 'asking' || B.stage !== 'reading' || B.myAns) return;
   const q = B.q;
   let ok = false, given = '';
   if (picked != null) { ok = norm(picked) === norm(q.alts[0]); given = picked; }
   else if (!timeout) { if (!norm(text)) { toast('答えを入力してください'); return; } ok = isCorrect(q, text); given = text; }
   const t = Math.round(now() - B.tStart);
   B.myAns = { ok, t, text: given, timeout: !!timeout };
+  if (B.read) B.read.done = true;
   send({ k: 'ans', round: B.round, ok, t, text: given });
   renderBattle();
 }
@@ -1315,7 +1434,7 @@ function hostReveal(r) {
   const results = [];
   ids.forEach(id => {
     const a = B.answers.get(id);
-    const pts = a && a.ok ? 10 + Math.round(10 * clamp(1 - a.t / (B.timeLimit * 1000), 0, 1)) : 0;
+    const pts = a && a.ok ? 10 + Math.round(10 * clamp(1 - a.t / (B.allowed || B.timeLimit * 1000), 0, 1)) : 0;
     B.scores.set(id, (B.scores.get(id) || 0) + pts);
     results.push({ id, name: pname(id), ok: !!(a && a.ok), pts, text: a ? a.text : '', t: a ? a.t : null });
   });
@@ -1327,6 +1446,8 @@ function onReveal(m) {
   B.phase = 'reveal'; B.results = m.results || [];
   B.scores = new Map(m.scores || []); (m.names || []).forEach(([id, n]) => B.names.set(id, n));
   const mine = B.results.find(x => x.id === B.me.id);
+  if (B.read) B.read.done = true;
+  if (mine && B.phase === 'reveal') SFX.play(mine.ok ? 'ok' : 'ng');
   B.view = { state: 'answered', loc: B.q ? B.q.loc : null, hideName: B.q ? B.q.hideName : false, hideLoc: false, ok: mine ? mine.ok : null };
   $('#readout').hidden = true;
   renderBattle(); dirty = true;
@@ -1368,7 +1489,7 @@ function settingsSummary(s) {
   if (!s) return '';
   const diffs = s.diffs.length === 5 ? 'すべての難易度' : '難易度 ' + s.diffs.map(d => '★'.repeat(d)).join(' ');
   const regs = s.regs.length === REGIONS.length ? 'すべての地域' : s.regs.join('・');
-  return `${s.count}問 · 1問${s.time}秒 · ${s.mode === 'choice' ? '4択' : '入力'} · ${diffs} · ${regs}`;
+  return `${s.count}問 · 読み終わってから${s.time}秒 · 表示${READ_LABEL[s.speed] || 'ふつう'} · ${s.mode === 'choice' ? '4択' : '入力'} · ${diffs} · ${regs}`;
 }
 function renderBattle() {
   const v = $('#view-battle');
@@ -1378,7 +1499,7 @@ function renderBattle() {
   const errHTML = B.err ? `<p class="hint">${esc(B.err)}</p>` : '';
   if (P === 'lobby' || P === 'connecting') {
     html = `<div><p class="eyebrow">オンライン対戦</p><h2 class="pname">みんなで対戦</h2></div>
-      <p class="lead">部屋を作って部屋コードを友達に伝えると、全員の画面で同じ地球儀が回り、同じ問題に同時に答えます。正解で10点、早く答えるほど最大10点のボーナスが付きます。</p>
+      <p class="lead">部屋を作って部屋コードを友達に伝えると、全員の画面で同じ地球儀が回り、同じ問題に同時に答えます。問題文は少しずつ表示され、読み終わる前でも答えられます。正解で10点、早く答えるほど最大10点のボーナスが付きます。</p>
       <div class="field"><label for="b-name">あなたの名前</label><input id="b-name" maxlength="12" value="${esc(B.me.name)}" autocomplete="nickname"></div>
       <div class="btnrow"><button class="btn brass" id="b-create" ${P === 'connecting' ? 'disabled' : ''}>部屋を作る</button></div>
       <div class="field"><label for="b-code">部屋コードで参加</label>
@@ -1392,7 +1513,8 @@ function renderBattle() {
       <section class="sec"><h3>参加者 ${activeIds().length}人</h3><div id="b-players">${playersHTML(false)}</div></section>
       ${B.isHost ? `<section class="sec"><h3>ルール</h3>
         <div class="set"><label class="lbl">問題数</label><div class="seg" style="align-self:flex-start">${[5, 10, 15, 20].map(n => `<button data-bn="${n}" aria-pressed="${B.settings.count === n}">${n}問</button>`).join('')}</div></div>
-        <div class="set"><label class="lbl">制限時間</label><div class="seg" style="align-self:flex-start">${[10, 15, 20, 30].map(n => `<button data-bt="${n}" aria-pressed="${B.settings.time === n}">${n}秒</button>`).join('')}</div></div>
+        <div class="set"><label class="lbl">読み終わってからの制限時間</label><div class="seg" style="align-self:flex-start">${[5, 10, 15, 20].map(n => `<button data-bt="${n}" aria-pressed="${B.settings.time === n}">${n}秒</button>`).join('')}</div></div>
+        <div class="set"><label class="lbl">問題文の表示速度</label><div class="seg" style="align-self:flex-start">${Object.keys(READ_SPEEDS).map(k => `<button data-bsp="${k}" aria-pressed="${B.settings.speed === k}">${READ_LABEL[k]}</button>`).join('')}</div></div>
         <div class="set"><label class="lbl">答え方</label><div class="seg" style="align-self:flex-start"><button data-bm="choice" aria-pressed="${B.settings.mode === 'choice'}">4択</button><button data-bm="input" aria-pressed="${B.settings.mode === 'input'}">入力</button></div></div>
         <div class="set"><label class="lbl">難易度</label><div class="chips">${chipsHTML('bd', B.settings.diffs, [1, 2, 3, 4, 5], false)}</div></div>
         <div class="set"><label class="lbl">地域</label><div class="chips">${chipsHTML('br', B.settings.regs, REGIONS, true)}</div></div>
@@ -1404,14 +1526,16 @@ function renderBattle() {
       ${errHTML}`;
   } else if (P === 'spinning' || P === 'asking') {
     const q = B.q;
-    const meta = `<div class="qmeta"><span>第${B.round}問 / ${B.total}</span><span class="stars">${stars(q.diff)}</span>${q.genre ? `<span class="tag">${esc(q.genre)}</span>` : ''}${q.type !== '国名' ? `<span class="tag">答え: ${esc(q.type)}</span>` : ''}</div>`;
+    const meta = `<div class="qmeta"><span>第${B.round}問 / ${B.total}</span><span class="stars">${stars(q.diff)}</span>${q.genre ? `<span class="tag">${esc(q.genre)}</span>` : ''}${q.type !== '国名' ? `<span class="tag">答え: ${esc(q.type)}</span>` : ''}${locTag(q)}</div>`;
     if (P === 'spinning') html = `<div class="qcard">${meta}<p class="qtext">地球儀が回っています…</p></div>`;
+    else if (B.stage !== 'reading') html = `<div class="qcard">${meta}${readingHTML(null, 'b-qtext')}</div>`;
     else {
-      const timer = `<div class="timer"><span class="mono" id="b-time">${B.timeLimit}</span><small>秒</small><div class="bar"><div id="b-bar"></div></div></div>`;
+      const left = Math.max(0, B.allowed - (now() - B.tStart));
+      const timer = `<div class="timer"><span class="mono" id="b-time">${Math.ceil(left / 1000)}</span><small>秒</small><div class="bar"><div id="b-bar" style="width:${(100 * left / B.allowed).toFixed(1)}%"></div></div></div>`;
       const body = B.myAns
         ? `<p class="lead">${B.myAns.timeout ? '時間切れです。' : '回答を送りました。'}ほかのプレイヤーを待っています。</p>`
         : answerUI(q, q.wireChoices, 'b');
-      html = `<div class="qcard">${meta}${timer}<p class="qtext">${esc(q.text)}</p>${body}</div>
+      html = `<div class="qcard">${meta}${timer}${readingHTML(B.read, 'b-qtext')}${body}</div>
         <section class="sec"><h3>回答状況</h3><div id="b-status">${statusHTML()}</div></section>`;
     }
     html += errHTML + (B.err && B.err.includes('ホスト') && !B.isHost ? '<div class="btnrow"><button class="btn primary" id="b-takeover">自分がホストになる</button><button class="btn" id="b-leave">部屋を出る</button></div>' : '');
@@ -1459,6 +1583,7 @@ $('#view-battle').addEventListener('click', e => {
   const c = t.closest('[data-bc]'); if (c && B.phase === 'asking') { submitBattle('', B.q.wireChoices[+c.dataset.bc]); return; }
   const n = t.closest('[data-bn]'); if (n) { B.settings.count = +n.dataset.bn; cfgChanged(); return; }
   const tt = t.closest('[data-bt]'); if (tt) { B.settings.time = +tt.dataset.bt; cfgChanged(); return; }
+  const bsp = t.closest('[data-bsp]'); if (bsp) { B.settings.speed = bsp.dataset.bsp; cfgChanged(); return; }
   const bm = t.closest('[data-bm]'); if (bm) { B.settings.mode = bm.dataset.bm; cfgChanged(); return; }
   const bd = t.closest('[data-bd]'); if (bd) { toggleIn(B.settings.diffs, [1, 2, 3, 4, 5], +bd.dataset.bd, false); cfgChanged(); return; }
   const br = t.closest('[data-br]'); if (br) { toggleIn(B.settings.regs, REGIONS, br.dataset.br, true); cfgChanged(); return; }

@@ -160,7 +160,13 @@ details.settings summary small{font-weight:400;color:var(--ink-3)}
 .qmeta{display:flex;flex-wrap:wrap;gap:8px;align-items:center;font-size:.78rem;color:var(--ink-2)}
 .stars{color:var(--brass);letter-spacing:.06em}
 .tag{border:1px solid var(--rule);border-radius:999px;padding:1px 9px;background:var(--panel)}
-.qtext{margin:0;font-size:1.08rem;line-height:1.75;font-weight:500}
+.qtext{margin:0;font-size:1.08rem;line-height:1.75;font-weight:500;min-height:3.5em}
+.qtext.intro{display:flex;align-items:center;min-height:3.5em}
+.mondai{font-family:var(--f-display);font-weight:800;font-size:1.9rem;letter-spacing:.35em;color:var(--brass);animation:pop .45s cubic-bezier(.2,1.6,.4,1)}
+.caret{display:inline-block;width:.55em;height:1.05em;margin-left:2px;vertical-align:-.12em;background:var(--brass-hi);border-radius:2px;animation:blink 1s steps(2,start) infinite}
+@keyframes pop{from{transform:scale(.6);opacity:0}to{transform:scale(1);opacity:1}}
+@keyframes blink{to{visibility:hidden}}
+@media (prefers-reduced-motion: reduce){.mondai,.caret{animation:none}}
 .ansrow{display:flex;gap:8px}
 .ansrow input{flex:1;min-width:0;border:1px solid var(--rule);border-radius:10px;padding:10px 12px;background:var(--panel);outline:none}
 .ansrow input:focus{border-color:var(--brass)}
