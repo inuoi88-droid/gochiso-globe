@@ -613,6 +613,7 @@ qInput.addEventListener('blur', () => setTimeout(() => { sugg.hidden = true; }, 
 const recent = [];
 const gsearch = q => `https://www.google.com/search?q=${encodeURIComponent(q)}`;
 function select(o, opt = {}) {
+  if (o !== landedObj) hideLanded();
   sel = o;
   const hi = recent.indexOf(o); if (hi >= 0) recent.splice(hi, 1);
   recent.unshift(o); if (recent.length > 7) recent.pop();
@@ -693,17 +694,41 @@ function shuffle() {
   do {
     o = pickCity ? D.cities[Math.floor(Math.random() * D.cities.length)] : shufflePlaces[Math.floor(Math.random() * shufflePlaces.length)];
   } while (o === sel);
-  sel = null; dirty = true;
+  sel = null; dirty = true; hideLanded();
   $('#view-explore').innerHTML = `<div class="pane"><p class="eyebrow">シャッフル中</p><h2 class="pname">…</h2><p class="lead">地球儀が止まった場所の郷土料理と豆知識を表示します。</p></div>`;
-  spinTo(o, zoomFor(o), () => { select(o); if (innerWidth < 960) revealPanel(); });
+  spinTo(o, zoomFor(o), () => { select(o); if (isNarrow()) showLanded(o); });
 }
+const isNarrow = () => innerWidth < 960;
 function revealPanel() { $('#panel').scrollIntoView({ behavior: REDUCED ? 'auto' : 'smooth', block: 'start' }); }
+// On phones the panel sits below the globe. Keep the landing spot on screen and
+// let the viewer choose when to scroll down, instead of scrolling away at once.
+let landedObj = null;
+function showLanded(o) {
+  landedObj = o;
+  const isCity = o.type === 'city';
+  $('#landed-sub').textContent = isCity ? `都市 · ${o.country.n}` : `${o.reg || ''} · ${o.un ? '国' : '地域'}`;
+  $('#landed-name').textContent = o.n;
+  $('#landed-dish').textContent = o.d && o.d.length ? '郷土料理: ' + o.d.slice(0, 3).map(d => d[0]).join('・') : '';
+  $('#landed').hidden = false;
+}
+function hideLanded() { landedObj = null; const el = $('#landed'); if (el) el.hidden = true; }
+$('#landed-go').onclick = () => { hideLanded(); revealPanel(); };
+$('#landed-x').onclick = hideLanded;
+// Quiz and battle: after the globe stops, bring the question card up from below,
+// aligned to the bottom edge so the pinned spot stays visible above it.
+function revealCard(sel) {
+  setTimeout(() => {
+    const el = document.querySelector(sel); if (!el) return;
+    const tall = el.getBoundingClientRect().height > innerHeight * 0.6;
+    el.scrollIntoView({ behavior: REDUCED ? 'auto' : 'smooth', block: tall ? 'start' : 'end' });
+  }, REDUCED ? 0 : 900);
+}
 $('#spin-btn').onclick = () => { if (mode === 'explore') shuffle(); else if (mode === 'quiz') nextQuestion(); };
 
 /* ---------------- modes ---------------- */
 function setMode(m) {
   if (m === mode) return;
-  mode = m;
+  mode = m; hideLanded();
   ['explore', 'quiz', 'battle'].forEach(k => {
     $('#tab-' + k).setAttribute('aria-selected', String(m === k));
     $('#view-' + k).hidden = m !== k;
@@ -870,7 +895,7 @@ function nextQuestion() {
   const dest = SQ.hideLoc ? { lp: [q.loc.lp[0] + (Math.random() - 0.5) * 60, clamp(q.loc.lp[1] + (Math.random() - 0.5) * 36, -70, 75)] } : q.loc;
   spinTo(dest, z, () => {
     SQ.state = 'asking'; SQ.view.state = 'asking'; updateSpinLabel(); renderQuiz();
-    if (innerWidth < 960) revealPanel();
+    if (isNarrow()) revealCard('#view-quiz .qcard');
     const inp = $('#ans'); if (inp && innerWidth >= 960) inp.focus({ preventScroll: true });
   });
 }
@@ -1203,7 +1228,7 @@ function onQuestion(m, elapsed) {
     renderBattle(); dirty = true;
     clearInterval(B.tick); B.tick = setInterval(tickTimer, 200); tickTimer();
     const inp = $('#bans'); if (inp && innerWidth >= 960) inp.focus({ preventScroll: true });
-    if (innerWidth < 960) revealPanel();
+    if (isNarrow()) revealCard('#view-battle .qcard');
   };
   if (elapsed > 0) { flyTo(B.q.loc, { zoom: Math.min(zoomFor(B.q.loc), 4.2), dur: 500, done: begin }); }
   else spinTo(B.q.loc, Math.min(zoomFor(B.q.loc), 4.2), begin);

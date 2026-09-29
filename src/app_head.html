@@ -103,6 +103,15 @@ button{cursor:pointer}
 .seg button[aria-pressed="true"]{background:var(--ink);color:var(--panel)}
 .readout{left:50%;top:58px;transform:translateX(-50%);background:var(--ink);color:var(--panel);font-weight:700;letter-spacing:.06em;padding:5px 14px;border-radius:999px;font-size:.92rem;white-space:nowrap}
 .tip{pointer-events:none;background:var(--ink);color:var(--panel);font-size:.8rem;padding:3px 9px;border-radius:6px;white-space:nowrap;transform:translate(12px,-130%)}
+.landed{left:50%;bottom:104px;transform:translateX(-50%);width:min(300px,calc(100% - 108px));background:var(--glass);border:1px solid var(--rule);border-radius:14px;padding:10px 14px 12px;box-shadow:0 10px 28px rgba(0,0,0,.18);backdrop-filter:blur(8px);display:flex;flex-direction:column;gap:2px;animation:rise .35s ease-out}
+.landed .eyebrow{font-size:.68rem;padding-right:24px}
+.landed-name{margin:0;font-family:var(--f-display);font-weight:800;font-size:1.35rem;line-height:1.25;letter-spacing:.04em;overflow-wrap:anywhere;padding-right:20px}
+.landed-dish{margin:0 0 8px;font-size:.8rem;color:var(--ink-2);overflow-wrap:anywhere}
+.landed-dish:empty{display:none}
+.landed .btn{width:100%;padding:9px 10px;font-size:.88rem}
+.landed-x{position:absolute;top:4px;right:4px;width:32px;height:32px;border:0;background:transparent;color:var(--ink-3);font-size:1.2rem;line-height:1;border-radius:8px}
+@keyframes rise{from{opacity:0;transform:translate(-50%,10px)}to{opacity:1;transform:translate(-50%,0)}}
+@media (prefers-reduced-motion: reduce){.landed{animation:none}}
 .toast{left:50%;top:50%;transform:translate(-50%,-50%);background:var(--ink);color:var(--panel);padding:8px 16px;border-radius:10px;font-size:.88rem;z-index:5;max-width:calc(100% - 32px);text-align:center}
 @media (max-width:620px){
   .coords{display:none}
