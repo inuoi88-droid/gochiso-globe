@@ -691,7 +691,7 @@ function animateTo(lon, lat, z1, opt = {}) {
   const lz0 = Math.log(z0), lz1 = Math.log(z1);
   const dip = spins ? 0 : clamp(dist / 180, 0, 0.5) * (Math.min(z0, z1) > 1.4 ? 1 : 0.3);
   const start = performance.now();
-  anim = {
+  const a = {
     step(t) {
       const k = Math.min(1, (t - start) / dur);
       if (spins) {
@@ -708,9 +708,20 @@ function animateTo(lon, lat, z1, opt = {}) {
       }
       return k >= 1;
     },
-    done: opt.done
+    done: opt.done,
+    finish() { rot[0] = l0 + dl; rot[1] = p1; zoom = z1; }
   };
+  anim = a;
+  // Finish on a timer too: requestAnimationFrame stops while the page is hidden,
+  // and game steps (the answer timer in a battle) must not wait for it.
+  if (opt.done) a.guard = setTimeout(() => { if (anim === a) { a.finish(); endAnim(); } }, dur + 400);
   vel = null;
+}
+function endAnim() {
+  const a = anim; if (!a) return;
+  anim = null; clearTimeout(a.guard); normRot(); dirty = true;
+  const cb = a.done; a.done = null;
+  if (cb) cb();
 }
 function flyTo(o, opt = {}) { animateTo(o.lp[0], o.lp[1], opt.zoom || zoomFor(o), opt); }
 
@@ -720,7 +731,7 @@ function frame(t) {
   if (anim) {
     const done = anim.step(t);
     dirty = true;
-    if (done) { const cb = anim.done; anim = null; normRot(); if (cb) cb(); }
+    if (done) endAnim();
   } else if (vel && !drag) {
     rot[0] += vel[0] * dt; rot[1] = clamp(rot[1] + vel[1] * dt, -89, 89);
     const f = Math.pow(0.93, dt / 16); vel[0] *= f; vel[1] *= f;
