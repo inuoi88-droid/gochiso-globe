@@ -166,12 +166,9 @@ details.settings summary small{font-weight:400;color:var(--ink-3)}
 .stars{color:var(--brass);letter-spacing:.06em}
 .tag{border:1px solid var(--rule);border-radius:999px;padding:1px 9px;background:var(--panel)}
 .qtext{margin:0;font-size:1.08rem;line-height:1.75;font-weight:500;min-height:3.5em}
-.qtext.intro{display:flex;align-items:center;min-height:3.5em}
-.mondai{font-family:var(--f-display);font-weight:800;font-size:1.9rem;letter-spacing:.35em;color:var(--brass);animation:pop .45s cubic-bezier(.2,1.6,.4,1)}
 .caret{display:inline-block;width:.55em;height:1.05em;margin-left:2px;vertical-align:-.12em;background:var(--brass-hi);border-radius:2px;animation:blink 1s steps(2,start) infinite}
-@keyframes pop{from{transform:scale(.6);opacity:0}to{transform:scale(1);opacity:1}}
 @keyframes blink{to{visibility:hidden}}
-@media (prefers-reduced-motion: reduce){.mondai,.caret{animation:none}}
+@media (prefers-reduced-motion: reduce){.caret{animation:none}}
 .ansrow{display:flex;gap:8px}
 .ansrow input{flex:1;min-width:0;border:1px solid var(--rule);border-radius:10px;padding:10px 12px;background:var(--panel);outline:none}
 .ansrow input:focus{border-color:var(--brass)}
@@ -1099,8 +1096,23 @@ function updateSpinLabel() {
 /* ================= quiz data ================= */
 // Columns are matched by header name, so their order does not matter.
 const QCOLS = ['問題', '答え', 'ジャンル', '難易度', '解説', '答えの種類', '場所', '選択肢'];
+const QALIAS = { '場所': ['国', '国名', '関連国', '対象国', '地名'], '答えの種類': ['種類'] };
+// ジャンル tags that describe a question rather than the kind of answer
+const TYPE_SKIP = ['世界一', '世界初', '日本初', '日本との関係'];
 const shuffleArr = a => { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
 const splitAlts = s => String(s || '').split(/[\/／]/).map(x => x.trim()).filter(Boolean);
+// Answers may carry their reading in brackets, e.g. 赤道ギニア（せきどうぎにあ） or
+// 日本（にほん/にっぽん）: the part outside is shown, and the readings are accepted too.
+function answerAlts(s) {
+  const readings = [];
+  const base = String(s || '').replace(/[（(]([^）)]*)[）)]/g, (m, inner) => {
+    if (/^[\sぁ-ゖァ-ヺー・\/／]+$/.test(inner)) { readings.push(...splitAlts(inner)); return ''; }
+    return m;
+  });
+  const out = [], seen = new Set();
+  for (const a of splitAlts(base).concat(readings)) { const k = norm(a); if (k && !seen.has(k)) { seen.add(k); out.push(a); } }
+  return out;
+}
 function parseTable(text) {
   text = String(text || '').replace(/^﻿/, '').replace(/\r\n?/g, '\n');
   const first = text.split('\n', 1)[0];
@@ -1129,12 +1141,56 @@ function resolveLoc(s) {
     return { lp: [lon, lat], place: null, city: null, name: '', reg: f && placeById.get(f.id) ? placeById.get(f.id).reg : 'その他' };
   }
   for (const a of splitAlts(s)) {
-    const o = nameIndex.get(norm(a));
-    if (!o) continue;
-    if (o.type === 'city') return { lp: o.lp, place: null, city: o, name: o.n, reg: o.country.reg };
-    return { lp: o.lp, place: o, city: null, name: o.n, reg: o.reg };
+    const o = nameIndex.get(norm(a)) || nameIndex.get(norm(a.replace(/(民主共和国|人民共和国|共和国|連邦|王国|公国|大公国)$/, '')));
+    if (o) return locOf(o);
   }
   return null;
+}
+const locOf = o => o.type === 'city'
+  ? { lp: o.lp, place: null, city: o, name: o.n, reg: o.country.reg }
+  : { lp: o.lp, place: o, city: null, name: o.n, reg: o.reg };
+// Country and city names written inside a sentence, in the order they appear.
+// Matching is on the original script, and a katakana name must not run into more
+// katakana (so タイ does not match タイトル and マリ does not match マリー).
+let mentionKeys = null;
+function mentionList() {
+  if (mentionKeys) return mentionKeys;
+  const m = new Map();
+  const add = (k, o) => { k = String(k || '').normalize('NFKC').trim(); if (k.length >= 2 && !m.has(k)) m.set(k, o); };
+  D.places.forEach(p => [p.n, ...(p.alts || [])].forEach(k => add(k, p)));
+  D.cities.forEach(c => add(c.n, c));
+  return (mentionKeys = [...m].sort((a, b) => b[0].length - a[0].length));
+}
+const scriptOf = ch => !ch ? '' : /[ァ-ヺー]/.test(ch) ? 'k' : /[A-Za-z0-9]/.test(ch) ? 'a' : 'x';
+const glued = (nb, edge) => { const s = scriptOf(edge); return s !== 'x' && scriptOf(nb) === s; };
+function findMentions(str) {
+  const t = String(str || '').normalize('NFKC'), taken = new Uint8Array(t.length), out = [];
+  for (const [k, o] of mentionList()) {
+    for (let i = t.indexOf(k); i >= 0; i = t.indexOf(k, i + 1)) {
+      const e = i + k.length;
+      if (taken.subarray(i, e).some(Boolean) || glued(t[i - 1], k[0]) || glued(t[e], k[k.length - 1])) continue;
+      taken.fill(1, i, e); out.push([i, o]);
+    }
+  }
+  return out.sort((a, b) => a[0] - b[0]).map(x => x[1]);
+}
+// Where to stop the globe for a question whose answer is not a place and that has no
+// 場所 column. Sheets are usually grouped by country (the country question first, then
+// questions about it), so the latest country answer is the best guess, checked against
+// the region tag in ジャンル; failing that, a country or city named in the question.
+function guessLoc(text, expl, region, block) {
+  const regOf = o => o.type === 'city' ? o.country.reg : o.reg;
+  const inReg = o => !region || regOf(o) === region;
+  const ms = findMentions(text);
+  if (block) {
+    if (ms.some(o => o === block.loc.place || (o.type === 'city' && o.country === block.loc.place))) return ['block', block.loc];
+    if (!region || !block.region || region === block.region) return ['block', block.loc];
+  }
+  let o = ms.find(inReg);
+  if (o) return ['text', locOf(o)];
+  if (block) return ['block', block.loc];
+  o = findMentions(expl).find(inReg);
+  return o ? ['expl', locOf(o)] : [null, null];
 }
 const locNames = loc => {
   const out = [];
@@ -1146,26 +1202,46 @@ function buildQuestions(text, src) {
   const rows = parseTable(text).filter(r => r.some(c => String(c).trim()));
   const qs = [], errors = [];
   if (!rows.length) return { qs, errors };
-  let header = rows[0].map(h => String(h).trim());
+  let header = rows[0].map(h => String(h).normalize('NFKC').trim());
   let start = 1;
   if (!header.includes('問題')) { header = QCOLS; start = 0; }   // pasted rows without a header
-  const ix = {}; QCOLS.forEach(k => { ix[k] = header.indexOf(k); });
+  const ix = {};
+  QCOLS.forEach(k => { ix[k] = [k, ...(QALIAS[k] || [])].map(h => header.indexOf(h)).find(j => j >= 0) ?? -1; });
   if (ix['答え'] < 0) { errors.push('見出しに「答え」の列がありません'); return { qs, errors }; }
+  let block = null;   // the latest row whose answer was a country
   for (let i = start; i < rows.length; i++) {
     const r = rows[i];
     const get = k => ix[k] >= 0 ? String(r[ix[k]] == null ? '' : r[ix[k]]).trim() : '';
     const line = i + 1;
-    const text = get('問題'), alts = splitAlts(get('答え'));
+    const text = get('問題'), alts = answerAlts(get('答え'));
     if (!text || !alts.length) { errors.push(`${line}行目: 問題か答えが空です`); continue; }
-    const type = get('答えの種類') || '国名';
+    const tags = get('ジャンル').split(/\s+/).filter(g => g && g !== '国連加盟国');
+    const region = tags.find(g => REGIONS.includes(g)) || '';
+    const topics = tags.filter(g => !REGIONS.includes(g));
+    let ansLoc = resolveLoc(alts.join('/'));
+    // a person who shares a name with a city (ホー・チ・ミン, ワシントン) is not that city
+    if (ansLoc && ansLoc.city && topics.includes('人物') && !get('答えの種類')) ansLoc = null;
+    if (ansLoc && ansLoc.place) block = { loc: ansLoc, region: region || ansLoc.reg };
+    let type = get('答えの種類'), typeGuess = false;
+    if (!type) {
+      if (ansLoc) type = ansLoc.city ? '都市' : '国名';
+      else { type = topics.find(g => !TYPE_SKIP.includes(g)) || 'その他'; typeGuess = true; }
+    }
     const locStr = get('場所');
-    const loc = resolveLoc(locStr || (type === '国名' ? get('答え') : ''));
-    if (!loc) { errors.push(locStr ? `${line}行目: 場所「${locStr}」が地図上で見つかりません` : `${line}行目: 場所の列を入れてください(国名・都市名・「緯度,経度」)`); continue; }
-    const genre = get('ジャンル').split(/\s+/).filter(g => g && g !== '国連加盟国' && !REGIONS.includes(g)).join(' ');
+    let loc = null, locBy = '';
+    if (locStr) {
+      loc = resolveLoc(locStr); locBy = 'col';
+      if (!loc) { errors.push(`${line}行目: 場所「${locStr}」が地図上で見つかりません`); continue; }
+    } else if (ansLoc) { loc = ansLoc; locBy = 'answer'; }
+    else if (type === '国名') { errors.push(`${line}行目: 答え「${alts[0]}」が国名として見つかりません(別の書き方を「/」で足してください)`); continue; }
+    else {
+      [locBy, loc] = guessLoc(text, get('解説'), region, block);
+      if (!loc) { errors.push(`${line}行目: どの国の問題か分かりません(場所の列に国名・都市名を入れてください)`); continue; }
+    }
     const diff = clamp(parseInt(get('難易度'), 10) || 3, 1, 5);
     const lnames = locNames(loc);
     const hideName = type === '国名' || alts.some(a => lnames.includes(norm(a)));
-    qs.push({ id: `${src}${i}`, text, alts, type, genre, diff, expl: get('解説'), choices: splitAlts(get('選択肢')), loc, reg: loc.reg, hideName });
+    qs.push({ id: `${src}${i}`, text, alts, type, typeGuess, genre: topics.join(' '), diff, expl: get('解説'), choices: splitAlts(get('選択肢')), loc, reg: loc.reg, hideName, locBy });
   }
   return { qs, errors };
 }
@@ -1175,7 +1251,7 @@ loadBase(window.GLOBE_QUIZ || '', '内蔵');
 const allQs = () => QUIZ.base.concat(QUIZ.extra);
 if (location.protocol.startsWith('http')) {
   fetch('quiz.tsv', { cache: 'no-store' }).then(r => r.ok ? r.text() : null).then(t => {
-    if (t && t.includes('問題') && t.includes('答え')) { loadBase(t, 'quiz.tsv'); if (mode === 'quiz') renderQuiz(); if (mode === 'battle') renderBattle(); }
+    if (t && t.includes('問題') && t.includes('答え')) { loadBase(t, 'quiz.tsv'); if (QUIZ.extraText) rebuildExtra(); if (mode === 'quiz') renderQuiz(); if (mode === 'battle') renderBattle(); }
   }).catch(() => { /* keep the built-in questions */ });
 }
 function makeChoices(q) {
@@ -1186,7 +1262,13 @@ function makeChoices(q) {
     const same = un.filter(x => x.reg === q.loc.place.reg);
     pool = pool.concat(shuffleArr((same.length >= 3 ? same : un).map(x => x.n)));
   }
+  if (pool.length < 3 && q.type === '都市' && q.loc.city) {
+    const cs = D.cities.filter(c => c !== q.loc.city), same = cs.filter(c => c.country.reg === q.loc.reg);
+    pool = pool.concat(shuffleArr((same.length >= 3 ? same : cs).map(c => c.n)));
+  }
   if (pool.length < 3) pool = pool.concat(shuffleArr(allQs().filter(x => x.type === q.type).map(x => x.alts[0])));
+  // a type read from ジャンル can be rare (国際機関): borrow other non-country answers
+  if (pool.length < 4 && q.typeGuess) pool = pool.concat(shuffleArr(allQs().filter(x => x.typeGuess).map(x => x.alts[0])));
   const seen = new Set(), picks = [];
   for (const p of (q.choices.length >= 3 ? shuffleArr(q.choices.slice()) : pool)) {
     const k = norm(p);
@@ -1244,10 +1326,10 @@ const SFX = {
     this.unlock();
     const c = this.ctx; if (!c) return;
     const t = c.currentTime + 0.03;
-    if (name === 'question') {          // "ジャジャン!" — a pickup note, then a bright chord
-      this.tone(392.0, t, 0.11, 'square', 0.07); this.tone(784.0, t, 0.11, 'triangle', 0.10);
-      [523.25, 659.25, 783.99, 1046.5].forEach((f, i) => this.tone(f, t + 0.13, 0.62, i % 2 ? 'triangle' : 'square', i % 2 ? 0.11 : 0.05));
-      this.tone(130.8, t + 0.13, 0.45, 'sine', 0.22);
+    if (name === 'question') {          // "てーん": one bell-like note
+      this.tone(1046.5, t, 1.2, 'sine', 0.24);
+      this.tone(2093.0, t, 0.5, 'sine', 0.06);
+      this.tone(2889.0, t, 0.22, 'sine', 0.025);
     } else if (name === 'ok') {         // "ピンポン"
       this.tone(1318.5, t, 0.16, 'sine', 0.2); this.tone(1046.5, t + 0.17, 0.42, 'sine', 0.2);
     } else if (name === 'ng') {         // "ブッブー"
@@ -1262,7 +1344,7 @@ bindToggle('#t-sfx', () => SFX.on, v => { SFX.on = v; store.set('sfx', v); if (v
 // Answers are accepted while it is still appearing (早応え).
 const READ_SPEEDS = { slow: 170, normal: 115, fast: 70 };
 const READ_LABEL = { slow: 'ゆっくり', normal: 'ふつう', fast: 'はやい' };
-const INTRO_MS = REDUCED ? 600 : 1600;   // jingle, then a beat of silence before reading
+const INTRO_MS = 250;   // the bell rings, and the text starts right after it
 function readPlan(text, msPerChar) {
   const chars = [...text], at = []; let t = 0;
   for (const ch of chars) {
@@ -1276,7 +1358,7 @@ function shownCount(plan, elapsed) {
   return n;
 }
 function readingHTML(R, id) {
-  if (!R) return `<p class="qtext intro" id="${id}"><span class="mondai">問題</span></p>`;
+  if (!R) return `<p class="qtext reading" id="${id}"><span class="caret"></span></p>`;
   const n = R.done ? R.plan.chars.length : shownCount(R.plan, now() - R.start);
   const end = R.done || n >= R.plan.chars.length;
   return `<p class="qtext reading" id="${id}" data-n="${n}">${esc(R.plan.chars.slice(0, n).join(''))}${end ? '' : '<span class="caret"></span>'}</p>`;
@@ -1297,6 +1379,7 @@ function readerTick() {
   }
   if (!active) { clearInterval(readerTimer); readerTimer = 0; }
 }
+const typeTag = q => q.type !== '国名' && !q.typeGuess ? `<span class="tag">答え: ${esc(q.type)}</span>` : '';
 const locTag = q => !q.hideName && q.loc.name ? `<span class="tag">場所: ${esc(q.loc.name)}</span>` : '';
 
 /* ================= solo quiz ================= */
@@ -1332,7 +1415,7 @@ function nextQuestion() {
     onLand: () => { SQ.view.state = 'asking'; dirty = true; },
     onDone: () => {
       if (SQ.state !== 'spinning' || tok !== SQ.token) return;
-      // "問題!" and a beat of silence, then the text starts to appear
+      // the bell rings and the text starts to appear right after it
       SQ.state = 'asking'; SQ.phase = 'intro'; updateSpinLabel(); renderQuiz();
       SFX.play('question');
       if (isNarrow()) revealCard('#view-quiz .qcard');
@@ -1386,7 +1469,7 @@ function toggleIn(set, list, key, withAll) {
 }
 function answerUI(q, choices, prefix) {
   if (choices) return `<div class="choices">${choices.map((c, i) => `<button data-${prefix}c="${i}">${esc(c)}</button>`).join('')}</div>`;
-  return `<form class="ansrow" data-form="${prefix}"><input id="${prefix}ans" placeholder="${esc(q.type)}を入力(ひらがな可)" autocomplete="off" aria-label="答え"><button class="btn primary">答える</button></form>`;
+  return `<form class="ansrow" data-form="${prefix}"><input id="${prefix}ans" placeholder="${q.typeGuess ? '答え' : esc(q.type)}を入力(ひらがな可)" autocomplete="off" aria-label="答え"><button class="btn primary">答える</button></form>`;
 }
 function dishesTeaser(q) {
   const o = locObj(q.loc);
@@ -1409,7 +1492,7 @@ function renderQuiz() {
   const addBox = `<details class="settings" id="sq-add"${SQ.addOpen ? ' open' : ''}>
     <summary>問題を追加 <small>${QUIZ.base.length}問(${esc(QUIZ.baseSrc)})${QUIZ.extra.length ? ` + 追加${QUIZ.extra.length}問` : ''}</small></summary>
     <div class="set">
-      <p class="note">スプレッドシートから行をコピーして貼り付けるか、TSV/CSVファイルを選んでください。列は ${QCOLS.join('・')}。国名以外が答えの問題は、答えの種類と場所(国名・都市名・「緯度,経度」)を入れます。追加した問題はこの端末に保存され、対戦でも出題されます。</p>
+      <p class="note">スプレッドシートから行をコピーして貼り付けるか、TSV/CSVファイルを選んでください。列は ${QCOLS.join('・')}(問題と答え以外は省略可)。国名以外が答えの問題で場所の列がないときは、すぐ上にある国名の問題や、問題文に出てくる国名から場所を判断します。追加した問題はこの端末に保存され、対戦でも出題されます。</p>
       <textarea id="add-text" rows="4" placeholder="問題&#9;答え&#9;ジャンル&#9;難易度&#9;解説&#9;答えの種類&#9;場所&#9;選択肢"></textarea>
       <div class="btnrow"><button class="btn" id="add-paste">貼り付けた行を追加</button><label class="btn file">ファイルを選ぶ<input type="file" id="add-file" accept=".tsv,.csv,.txt,text/tab-separated-values,text/csv" hidden></label>${QUIZ.extra.length ? '<button class="btn" id="add-clear">追加した問題を消す</button>' : ''}</div>
       ${SQ.addMsg ? `<p class="hint">${esc(SQ.addMsg)}</p>` : ''}
@@ -1431,7 +1514,7 @@ function renderQuiz() {
     card = `<div class="qcard"><p class="qmeta"><span>第${SQ.n}問</span></p><p class="qtext">地球儀が回っています…</p></div>`;
   } else {
     const q = cur.q;
-    const meta = `<div class="qmeta"><span>第${SQ.n}問</span><span class="stars" aria-label="難易度${q.diff}">${stars(q.diff)}</span>${q.genre ? `<span class="tag">${esc(q.genre)}</span>` : ''}${q.type !== '国名' ? `<span class="tag">答え: ${esc(q.type)}</span>` : ''}${locTag(q)}${SQ.hideLoc ? '<span class="tag">位置なし</span>' : ''}</div>`;
+    const meta = `<div class="qmeta"><span>第${SQ.n}問</span><span class="stars" aria-label="難易度${q.diff}">${stars(q.diff)}</span>${q.genre ? `<span class="tag">${esc(q.genre)}</span>` : ''}${typeTag(q)}${locTag(q)}${SQ.hideLoc ? '<span class="tag">位置なし</span>' : ''}</div>`;
     if (SQ.state === 'asking' && SQ.phase !== 'reading') {
       card = `<div class="qcard">${meta}${readingHTML(null, 's-qtext')}</div>`;
     } else if (SQ.state === 'asking') {
@@ -1491,24 +1574,33 @@ document.addEventListener('keydown', e => {
 function addQuestions(text, label) {
   const r = buildQuestions(text, 't');
   if (!r.qs.length) { SQ.addMsg = `${label}: 追加できる問題がありませんでした${r.errors.length ? '(' + r.errors[0] + ')' : ''}`; rerenderQuiz(); return; }
+  const have = new Set(allQs().map(q => norm(q.text)));
+  const fresh = r.qs.filter(q => !have.has(norm(q.text))).length;
+  if (!fresh) { SQ.addMsg = `${label}: ${r.qs.length}問とも追加済みです`; SQ.addOpen = true; rerenderQuiz(); return; }
   // keep a header so stored text always parses the same way
   let body = String(text).replace(/\r\n?/g, '\n').trim();
   const first = parseTable(body)[0].map(h => String(h).trim());
   if (!first.includes('問題')) body = QCOLS.join('\t') + '\n' + body;
   QUIZ.extraText = QUIZ.extraText ? QUIZ.extraText + '\n\n' + body : body;
   store.set('extra-quiz', QUIZ.extraText);
-  // stored blocks may each carry a header; parse block by block
-  QUIZ.extra = []; QUIZ.extraErr = [];
-  QUIZ.extraText.split(/\n\s*\n/).forEach((blk, bi) => { const rr = buildQuestions(blk, 'x' + bi + '_'); QUIZ.extra.push(...rr.qs); QUIZ.extraErr.push(...rr.errors); });
-  SQ.addMsg = `${label}: ${r.qs.length}問を追加しました${r.errors.length ? `(読み込めなかった行 ${r.errors.length}件)` : ''}`;
+  rebuildExtra();
+  const dup = r.qs.length - fresh;
+  SQ.addMsg = `${label}: ${fresh}問を追加しました${dup ? `(${dup}問は追加済み)` : ''}${r.errors.length ? `(読み込めなかった行 ${r.errors.length}件)` : ''}`;
   SQ.addOpen = true;
   rerenderQuiz();
 }
-// re-parse stored extra text block by block (a block = one paste or file)
-if (QUIZ.extraText) {
+// Stored extra text is re-parsed block by block (a block = one paste or file), so rows
+// saved before the parser learned something new load now. Repeated questions count once.
+function rebuildExtra() {
   QUIZ.extra = []; QUIZ.extraErr = [];
-  QUIZ.extraText.split(/\n\s*\n/).forEach((blk, bi) => { const rr = buildQuestions(blk, 'x' + bi + '_'); QUIZ.extra.push(...rr.qs); QUIZ.extraErr.push(...rr.errors); });
+  const seen = new Set(QUIZ.base.map(q => norm(q.text)));
+  QUIZ.extraText.split(/\n\s*\n/).forEach((blk, bi) => {
+    const rr = buildQuestions(blk, 'x' + bi + '_');
+    rr.qs.forEach(q => { const k = norm(q.text); if (!seen.has(k)) { seen.add(k); QUIZ.extra.push(q); } });
+    QUIZ.extraErr.push(...rr.errors);
+  });
 }
+if (QUIZ.extraText) rebuildExtra();
 $('#view-quiz').addEventListener('click', e => {
   const t = e.target;
   if (t.closest('#q-start') || t.closest('#q-next')) { nextQuestion(); return; }
@@ -1689,12 +1781,12 @@ function applySync(m) {
   renderBattle();
 }
 function toWire(q, choices) {
-  return { text: q.text, alts: q.alts, type: q.type, genre: q.genre, diff: q.diff, expl: q.expl, choices, hideName: q.hideName,
+  return { text: q.text, alts: q.alts, type: q.type, typeGuess: q.typeGuess, genre: q.genre, diff: q.diff, expl: q.expl, choices, hideName: q.hideName,
     loc: { lp: q.loc.lp, pid: q.loc.place ? q.loc.place.id : null, ck: q.loc.city ? q.loc.city.key : null, name: q.loc.name } };
 }
 function fromWire(w) {
   const place = w.loc.pid ? placeById.get(w.loc.pid) : null, city = w.loc.ck ? cityByKey.get(w.loc.ck) : null;
-  return { text: w.text, alts: w.alts, type: w.type, genre: w.genre, diff: w.diff, expl: w.expl, wireChoices: w.choices, hideName: w.hideName, choices: [],
+  return { text: w.text, alts: w.alts, type: w.type, typeGuess: w.typeGuess, genre: w.genre, diff: w.diff, expl: w.expl, wireChoices: w.choices, hideName: w.hideName, choices: [],
     loc: { lp: w.loc.lp, place, city, name: w.loc.name || (city ? city.n : place ? place.n : '') } };
 }
 function battlePool() { return filterPool(B.settings.diffs, B.settings.regs); }
@@ -1891,7 +1983,7 @@ function renderBattle() {
       ${errHTML}`;
   } else if (P === 'spinning' || P === 'asking') {
     const q = B.q;
-    const meta = `<div class="qmeta"><span>第${B.round}問 / ${B.total}</span><span class="stars">${stars(q.diff)}</span>${q.genre ? `<span class="tag">${esc(q.genre)}</span>` : ''}${q.type !== '国名' ? `<span class="tag">答え: ${esc(q.type)}</span>` : ''}${locTag(q)}</div>`;
+    const meta = `<div class="qmeta"><span>第${B.round}問 / ${B.total}</span><span class="stars">${stars(q.diff)}</span>${q.genre ? `<span class="tag">${esc(q.genre)}</span>` : ''}${typeTag(q)}${locTag(q)}</div>`;
     if (P === 'spinning') html = `<div class="qcard">${meta}<p class="qtext">${spinning ? '地球儀が回っています…' : 'まもなく地球儀が回ります…'}</p></div>`;
     else if (B.stage !== 'reading') html = `<div class="qcard">${meta}${readingHTML(null, 'b-qtext')}</div>`;
     else {
@@ -1975,7 +2067,7 @@ renderBattle();
 updateSpinLabel();
 const hm = location.hash.match(/^#room-([A-Za-z0-9]{4})$/);
 if (hm) { B.joinCode = hm[1].toUpperCase(); setMode('battle'); }
-window.__globe = { B, SQ, QUIZ, allQs };
+window.__globe = { B, SQ, QUIZ, allQs, buildQuestions, findMentions, makeChoices };
 })();
 
 </script>
