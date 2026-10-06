@@ -139,6 +139,104 @@ console.log('rows', rows.length, '-> merged', merged.length, 'rewound polygons',
   console.log('land clip done', merged.length, 'cached', hit, 'failed (kept as is)', failed);
 }
 
+/* ---------- overlaps: in any year, land claimed by two polities belongs to the smaller one ---------- */
+// Cliopatria sometimes keeps a former colony inside the old power for decades (the French
+// Fifth Republic row of 1961-2023 still holds Algeria after it became independent in 1963).
+// The app already draws smaller shapes on top, so here the larger shape loses that land too,
+// year by year; otherwise its name, area and quiz pin would sit on the other country.
+{
+  const boxOf = rings => { const a = [180, 90, -180, -90]; for (const rg of rings) for (const [x, y] of rg) { if (x < a[0]) a[0] = x; if (y < a[1]) a[1] = y; if (x > a[2]) a[2] = x; if (y > a[3]) a[3] = y; } return a; };
+  const KM2_ = 6371.0088 * 6371.0088;
+  const geoArea = g => polysOf(g).reduce((s, poly) => s + d3.geoArea({ type: 'Polygon', coordinates: poly }), 0);
+  const inner = g => {   // a point well inside the biggest polygon
+    let big = null, bigA = -1;
+    for (const poly of polysOf(g)) { const a = d3.geoArea({ type: 'Polygon', coordinates: poly }); if (a > bigA) { bigA = a; big = poly; } }
+    if (!big) return null;
+    const ref = big[0][0][0];
+    const p = polylabel(big.map(rg => rg.map(([x, y]) => { const dx = x - ref; return [dx > 180 ? x - 360 : dx < -180 ? x + 360 : x, y]; })), 0.05);
+    return [p[0] > 180 ? p[0] - 360 : p[0] < -180 ? p[0] + 360 : p[0], p[1]];
+  };
+  // polygon-clipping occasionally fails on nearly coincident edges: then cut one shape at a
+  // time, rounding the coordinates on a second try, and skip only a shape that still fails
+  const round = polys => polys.map(p => p.map(rg => rg.map(([x, y]) => [Math.round(x * 1e5) / 1e5, Math.round(y * 1e5) / 1e5])));
+  function subtract(base, subs) {
+    try { return { polys: pc.difference(base, ...subs), skipped: [] }; } catch (e) { /* try one by one */ }
+    let cur = base; const skipped = [];
+    subs.forEach((sub, i) => {
+      try { cur = pc.difference(cur, sub); return; } catch (e) { /* retry rounded */ }
+      try { cur = pc.difference(round(cur), round(sub)); return; } catch (e) { skipped.push(i); }
+    });
+    return { polys: cur, skipped };
+  }
+  const leafRows = merged.filter(r => !r.group);
+  for (const r of leafRows) { r.sa = geoArea(r.geom); r.box = boxOf(polysOf(r.geom).flat()); r.ip = inner(r.geom); }
+  // rows active in each 25-year window, to find candidates quickly
+  const W = 25, buckets = new Map();
+  for (const r of leafRows) for (let b = Math.floor(r.from / W); b <= Math.floor(r.to / W); b++) { if (!buckets.has(b)) buckets.set(b, []); buckets.get(b).push(r); }
+  const wins = (s, r) => s.sa < r.sa || (s.sa === r.sa && (s.from > r.from || (s.from === r.from && s.ja > r.ja)));
+  const cacheFile = path.join(ROOT, 'build', 'cache', 'overlap.json');
+  let cache = {};
+  try { cache = JSON.parse(fs.readFileSync(cacheFile, 'utf8')); } catch (e) { /* no cache yet */ }
+  const fresh = {};
+  const out = [];
+  let pairs = 0, split = 0, failed = 0;
+  const report = ['larger\tyears\tsmaller (kept)\tyears\tlarger km2\tsmaller km2'];
+  const t0 = Date.now();
+  for (const r of merged) {
+    if (r.group || !r.ip) { out.push(r); continue; }
+    const seen = new Set(), over = [];
+    for (let b = Math.floor(r.from / W); b <= Math.floor(r.to / W); b++) {
+      for (const s of buckets.get(b) || []) {
+        if (s === r || seen.has(s)) continue;
+        seen.add(s);
+        if (s.ja === r.ja || !s.ip || s.to < r.from || s.from > r.to || !wins(s, r)) continue;
+        if (s.box[0] > r.box[2] || s.box[2] < r.box[0] || s.box[1] > r.box[3] || s.box[3] < r.box[1]) continue;
+        // only shapes that really sit inside this one, not neighbours touching along a border
+        if (!d3.geoContains(r.geom, s.ip)) continue;
+        over.push(s);
+      }
+    }
+    if (!over.length) { out.push(r); continue; }
+    pairs += over.length;
+    for (const s of over) report.push([r.ja, `${r.from}-${r.to}`, s.ja, `${s.from}-${s.to}`, Math.round(r.sa * KM2_), Math.round(s.sa * KM2_)].join('\t'));
+    // split the years wherever the set of overlapping shapes changes
+    const cuts = new Set([r.from, r.to + 1]);
+    for (const s of over) { if (s.from > r.from) cuts.add(s.from); if (s.to < r.to) cuts.add(s.to + 1); }
+    const ys = [...cuts].sort((a, b) => a - b);
+    let last = null;
+    for (let i = 0; i < ys.length - 1; i++) {
+      const a = ys[i], b = ys[i + 1] - 1;
+      const act = over.filter(s => s.from <= a && s.to >= b);
+      let geom = r.geom;
+      if (act.length) {
+        const h = crypto.createHash('sha1').update(r.key + '|' + act.map(s => s.key).sort().join('|')).digest('hex');
+        let res = cache[h];
+        if (res === undefined) {
+          const left = subtract(polysOf(r.geom), act.map(s => polysOf(s.geom)));
+          res = left.polys;
+          if (left.skipped.length) { failed++; report.push(`FAILED\t${r.ja}\t${r.from}-${r.to}\t${left.skipped.map(i => act[i].ja).join(',')}`); }
+        }
+        fresh[h] = res;
+        if (res) {
+          for (const poly of res) if (d3.geoArea({ type: 'Polygon', coordinates: poly }) > 2 * Math.PI) poly.forEach(ring => ring.reverse());
+          geom = { type: 'MultiPolygon', coordinates: res };
+        }
+      }
+      const key = geom === r.geom ? r.key : JSON.stringify(geom.coordinates);
+      // nothing left (the whole shape was another polity's that year): drop those years
+      if (!polysOf(geom).length) { last = null; continue; }
+      if (last && last.key === key && last.to === a - 1) { last.to = b; continue; }
+      last = Object.assign({}, r, { from: a, to: b, geom, key });
+      out.push(last);
+    }
+    split++;
+  }
+  merged.length = 0; merged.push(...out);
+  fs.writeFileSync(cacheFile, JSON.stringify(fresh));
+  fs.writeFileSync(path.join(ROOT, 'build', 'cache', 'overlap-report.tsv'), report.join('\n') + '\n');
+  console.log('overlaps: rows cut', split, 'overlapping pairs', pairs, 'failed (kept as is)', failed, 'rows now', merged.length, `(${Math.round((Date.now() - t0) / 1000)}s)`);
+}
+
 /* ---------- polities ---------- */
 const polities = [], pIndex = new Map();
 for (const r of merged) {
