@@ -219,18 +219,25 @@ function subtract(base, subs) {
   for (const q of rules) for (const n of q.keep ? [q.a, q.b] : [q.win, q.lose]) if (!named.has(n)) throw new Error('overrides: unknown polity ' + n);
   // years [f,t] minus a list of [from,to] ranges
   const minus = (f, t, cut) => { let parts = [[f, t]]; for (const [a, b] of cut) parts = parts.flatMap(([x, y]) => b < x || a > y ? [[x, y]] : [...(a > x ? [[x, a - 1]] : []), ...(b < y ? [[b + 1, y]] : [])]); return parts; };
+  // Cliopatria shapes never cross the 180° meridian, so a flat point-in-polygon test is exact
+  // enough here and far faster than d3.geoContains (it runs millions of times)
+  const prep = g => polysOf(g).map(p => ({ p, b: boxOf([p[0]]) }));
+  const inRing = (rg, x, y) => { let c = false; for (let i = 0, j = rg.length - 1; i < rg.length; j = i++) { const [xi, yi] = rg[i], [xj, yj] = rg[j]; if ((yi > y) !== (yj > y) && x < (xj - xi) * (y - yi) / (yj - yi) + xi) c = !c; } return c; };
+  const contains = (pp, [x, y]) => pp.some(({ p, b }) => x >= b[0] && x <= b[2] && y >= b[1] && y <= b[3] && inRing(p[0], x, y) && !p.slice(1).some(h => inRing(h, x, y)));
   const KEEP_KM2 = 300;   // ignore cuts smaller than this (and than 0.3% of the shape): border slivers
   const leafRows = merged.filter(r => !r.group);
+  const tProbe = Date.now();
   for (const r of leafRows) {
     r.sa = sphArea(r.geom);
     r.box = boxOf(polysOf(r.geom).flat());
+    r.pp = prep(r.geom);
     const polys = polysOf(r.geom);
     // where to look for overlaps: an inner point of every sizeable part, plus a grid of points
     r.probes = polys.filter(p => d3.geoArea({ type: 'Polygon', coordinates: p }) >= r.sa * 0.02 || polys.length === 1).map(innerOf);
     const [x0, y0, x1, y1] = r.box, n = 9, grid = [];
     if (x1 - x0 < 300) for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) {
       const q = [x0 + (x1 - x0) * (i + 0.5) / n, y0 + (y1 - y0) * (j + 0.5) / n];
-      if (d3.geoContains(r.geom, q)) grid.push(q);
+      if (contains(r.pp, q)) grid.push(q);
     }
     r.grid = grid;
   }
@@ -250,6 +257,7 @@ function subtract(base, subs) {
   let pairs = 0, split = 0, failed = 0;
   const report = ['larger\tyears\tsmaller (kept)\tyears\tlarger km2\tsmaller km2'];
   const t0 = Date.now();
+  console.log(`  overlap probes ready (${Math.round((Date.now() - tProbe) / 1000)}s)`);
   for (const r of merged) {
     if (r.group) { out.push(r); continue; }
     const seen = new Set(), over = [];
@@ -271,8 +279,8 @@ function subtract(base, subs) {
         if (!all.length) continue;
         // only shapes that really overlap this one, not neighbours touching along a border
         if (!forced.length) {
-          const hitProbe = s.probes.some(q => inBox(q, r.box) && d3.geoContains(r.geom, q));
-          const hitGrid = !hitProbe && s.grid.filter(q => inBox(q, r.box) && d3.geoContains(r.geom, q)).length >= 2;
+          const hitProbe = s.probes.some(q => inBox(q, r.box) && contains(r.pp, q));
+          const hitGrid = !hitProbe && s.grid.filter(q => inBox(q, r.box) && contains(r.pp, q)).length >= 2;
           if (!hitProbe && !hitGrid) continue;
         }
         for (const [f, t] of all) over.push({ s, f, t });

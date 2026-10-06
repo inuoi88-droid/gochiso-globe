@@ -69,6 +69,8 @@ URLの末尾に `#timeslip` / `#food` を付けると、そのモードで開く
 
 境界線は [Cliopatria](https://github.com/Seshat-Global-History-Databank/cliopatria)(Seshat Global History Databank、[CC BY 4.0](https://creativecommons.org/licenses/by/4.0/))を使う。線を簡略化し、海にはみ出した部分を Natural Earth の海岸線で切り落とし、日本語名を付けている(画面の注記にも出典と改変を書いている)。
 
+Cliopatria では、独立した国の土地が旧宗主国の範囲にも残っていることがある(例: 1961〜2023年のフランスに、1963年に独立したアルジェリアが入ったまま)。ビルド時に、同じ年に2つの勢力の範囲が重なっていれば、小さい方の勢力の土地として大きい方から切り取る。この規則が合わない組は `data/history/overrides.txt` に書く。
+
 `site/history/` に置く静的ファイルだけで動く(データベースは使わない)。
 
 - `index.json`: 勢力の一覧・図鑑・出来事(gzip で約110KB)
@@ -86,10 +88,12 @@ npm install
 npm run history -- /tmp/clio/cliopatria_polities_only_v021.geojson
 ```
 
-初回は海岸線での切り落としに5分ほどかかる(結果は `build/cache/` に保存され、2回目からは30秒ほど)。
+初回は海岸線での切り落としなどに15分ほどかかる(結果は `build/cache/` に保存され、2回目からは1分ほど)。重なりを切り取った組の一覧は `build/cache/overlap-report.tsv` に出る。
 
 - `data/history/polities.tsv`: Cliopatria の勢力名 → 日本語名(教科書の表記)。同じ勢力を時代で分けるときは年の範囲を付けて複数行にする(例: 前漢 / 後漢、メロヴィング朝 / カロリング朝)。日本語名が同じ勢力は図鑑で1つにまとまる。未登録の名前があるとビルドが止まる
-- `data/history/extra.txt`: Cliopatria にない勢力(倭、大ジンバブエなど)。境界はおおまかな多角形で、海にはみ出してよい
+- `data/history/extra.txt`: Cliopatria にない勢力(倭、大ジンバブエ、コモロなど)や記録の抜けている年(イラク 2006〜2013年など)。境界はおおまかな多角形で、海にはみ出してよい
+- `data/history/overrides.txt`: 重なりの例外(海南島は中華人民共和国、など)
+- `data/history/labels.tsv`: 国名を置く本国の地点(植民地の方が大きい国で、国名が植民地に出ないようにする)
 - `data/history/zukan.txt`: 図鑑の解説。書き方はファイル先頭のコメントを参照。クイズの「図鑑から」はこの内容から自動で作る
 - `data/history/events.txt`: 出来事(年・場所・説明・関係する勢力)
 
