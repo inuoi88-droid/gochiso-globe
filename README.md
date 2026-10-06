@@ -14,6 +14,17 @@
 
 URLの末尾に `#timeslip` / `#food` を付けると、そのモードで開く。
 
+## 案内役(チュートリアル)
+
+銀河義賊ラグ☆ジュアリ～が、ノベルゲームのように立ち絵を切り替えながら使い方を説明する。
+
+- 初めて開いたときに「使い方を案内しようか?」と聞く。「聞く!」で基本の使い方とモードの紹介、「あとで」ならモードの紹介もお休みにする
+- タイムスリップ・ごちそう・クイズ・対戦・歴史クイズ・平面地図は、初めて開いたときにそのモードを紹介する
+- 「⋯」メニューの「使い方を聞く」でいつでも聞き直せる。モード紹介のオン/オフも同じメニュー
+- 見た案内はその端末(ブラウザ)に保存する(localStorage の `gg-lag`。消すと初めての状態に戻る)。対戦の招待リンクから開いたときは出さない
+- セリフは `src/app.js` の `const LAG = {` にある。1行が `[ポーズ, セリフ, { spot: 光らせる部分, do: 始めにすること }]`。ポーズは `point`(ここだ!)・`jaki`(ジャキーン!)・`douzo`(どうぞ!)・`good`(グッド)
+- 立ち絵は `site/img/lag-*.webp`。4ポーズを並べた元画像から `python3 build/sprites.py 元画像 site/img` で切り出す(背景の灰色を透明にする)
+
 公開ページは `site/` フォルダの中身だけで動く静的サイト。`main` ブランチに push すると Vercel が自動で公開し直す。
 
 ## 問題を追加する
@@ -69,6 +80,8 @@ URLの末尾に `#timeslip` / `#food` を付けると、そのモードで開く
 
 境界線は [Cliopatria](https://github.com/Seshat-Global-History-Databank/cliopatria)(Seshat Global History Databank、[CC BY 4.0](https://creativecommons.org/licenses/by/4.0/))を使う。線を簡略化し、海にはみ出した部分を Natural Earth の海岸線で切り落とし、日本語名を付けている(画面の注記にも出典と改変を書いている)。
 
+Cliopatria では、独立した国の土地が旧宗主国の範囲にも残っていることがある(例: 1961〜2023年のフランスに、1963年に独立したアルジェリアが入ったまま)。ビルド時に、同じ年に2つの勢力の範囲が重なっていれば、小さい方の勢力の土地として大きい方から切り取る。この規則が合わない組は `data/history/overrides.txt` に書く。
+
 `site/history/` に置く静的ファイルだけで動く(データベースは使わない)。
 
 - `index.json`: 勢力の一覧・図鑑・出来事(gzip で約110KB)
@@ -86,10 +99,12 @@ npm install
 npm run history -- /tmp/clio/cliopatria_polities_only_v021.geojson
 ```
 
-初回は海岸線での切り落としに5分ほどかかる(結果は `build/cache/` に保存され、2回目からは30秒ほど)。
+初回は海岸線での切り落としなどに15分ほどかかる(結果は `build/cache/` に保存され、2回目からは1分ほど)。重なりを切り取った組の一覧は `build/cache/overlap-report.tsv` に出る。
 
 - `data/history/polities.tsv`: Cliopatria の勢力名 → 日本語名(教科書の表記)。同じ勢力を時代で分けるときは年の範囲を付けて複数行にする(例: 前漢 / 後漢、メロヴィング朝 / カロリング朝)。日本語名が同じ勢力は図鑑で1つにまとまる。未登録の名前があるとビルドが止まる
-- `data/history/extra.txt`: Cliopatria にない勢力(倭、大ジンバブエなど)。境界はおおまかな多角形で、海にはみ出してよい
+- `data/history/extra.txt`: Cliopatria にない勢力(倭、大ジンバブエ、コモロなど)や記録の抜けている年(イラク 2006〜2013年など)。境界はおおまかな多角形で、海にはみ出してよい
+- `data/history/overrides.txt`: 重なりの例外(海南島は中華人民共和国、など)
+- `data/history/labels.tsv`: 国名を置く本国の地点(植民地の方が大きい国で、国名が植民地に出ないようにする)
 - `data/history/zukan.txt`: 図鑑の解説。書き方はファイル先頭のコメントを参照。クイズの「図鑑から」はこの内容から自動で作る
 - `data/history/events.txt`: 出来事(年・場所・説明・関係する勢力)
 
@@ -107,7 +122,7 @@ npm run build  # data/*.txt → build/bundle.json → site/index.html
 - `data/cities.txt`: `#都市名|ISO3|緯度|経度` の下に同じ形式
 - `data/extras.txt`: 台湾・香港などの地域
 - `data/country_names.tsv`: 国連加盟国の日本語名・別名・地域
-- `src/app.js`: 地球儀・平面地図の描画、シャッフル、検索、クイズ、対戦、タイムスリップ
+- `src/app.js`: 地球儀・平面地図の描画、シャッフル、検索、クイズ、対戦、タイムスリップ、案内役
 - `src/app_head.html` / `src/app_body.html`: 見た目とHTML
 
 地図は Natural Earth 1:50m(world-atlas)。国境線は実効支配線にもとづき、帰属に争いのある地域は斜線で表示する。

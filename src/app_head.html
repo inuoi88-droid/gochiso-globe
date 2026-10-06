@@ -302,5 +302,46 @@ details.errs ul{margin:4px 0 0;padding-left:18px}
 .things li b{margin-right:6px}
 .swatch{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:6px;vertical-align:0;border:1px solid var(--h-line)}
 .chip.on{border-color:var(--brass-hi);background:var(--brass-soft)}
+
+/* guide: a novel-game text box with the character standing on it, and a spotlight on what is being explained */
+.sr{position:absolute;width:1px;height:1px;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+.menutog{align-self:flex-start;margin:2px 6px 4px}
+.lag{position:fixed;inset:0;z-index:60;cursor:pointer;-webkit-tap-highlight-color:transparent}
+.lag.lag-dim{background:rgba(8,14,18,.3)}
+.lag-spot{position:fixed;left:0;top:0;border-radius:12px;pointer-events:none;box-shadow:0 0 0 3px var(--brass-hi),0 0 0 200vmax rgba(8,14,18,.44);transition:left .3s ease,top .3s ease,width .3s ease,height .3s ease}
+.lag-wrap{position:absolute;left:50%;bottom:16px;transform:translateX(-50%);width:min(760px,calc(100% - 32px))}
+.lag.lag-up .lag-wrap{bottom:auto;top:16px}
+.lag-sprite{position:absolute;left:6px;bottom:calc(100% - 34px);height:clamp(150px,36vh,330px);width:auto;pointer-events:none;filter:drop-shadow(0 10px 18px rgba(0,0,0,.28));transform-origin:50% 100%}
+.lag.lag-up .lag-sprite{bottom:auto;top:calc(100% - 34px);left:auto;right:6px}
+.lag-box{position:relative;background:var(--panel);border:2px solid var(--brass-hi);border-radius:16px;padding:24px 22px 18px;box-shadow:0 18px 50px rgba(0,0,0,.3);outline:none}
+.lag-box:focus-visible{box-shadow:0 0 0 3px var(--brass),0 18px 50px rgba(0,0,0,.3)}
+.lag-name{position:absolute;left:18px;top:-16px;margin:0;display:flex;align-items:baseline;gap:7px;background:var(--ink);color:var(--panel);border-radius:999px;padding:3px 15px 4px;font-weight:700;font-size:.92rem;letter-spacing:.06em;line-height:1.4}
+.lag-name small{font-size:.66rem;letter-spacing:.14em;color:var(--brass-soft)}
+.lag-skip{position:absolute;right:12px;top:-14px;border:1px solid var(--rule);background:var(--panel);border-radius:999px;padding:1px 12px;font-size:.76rem;color:var(--ink-2);line-height:1.6}
+.lag-skip:hover{border-color:var(--brass-hi)}
+.lag-text{margin:0;font-size:1.05rem;line-height:1.85;min-height:3.7em;white-space:pre-line;overflow-wrap:anywhere}
+.lag-more{position:absolute;right:18px;bottom:8px;color:var(--brass);font-size:.78rem;animation:lagbob 1s ease-in-out infinite}
+.lag-choices{display:flex;gap:10px;flex-wrap:wrap;margin-top:12px}
+.lag-choices button{border:1px solid var(--brass-hi);background:var(--brass-soft);border-radius:10px;padding:8px 20px;font-weight:700}
+.lag-choices button:first-child{background:var(--brass-hi);color:var(--on-brass)}
+.lag-sprite.enter{animation:lagin .42s cubic-bezier(.2,.9,.3,1.25)}
+.lag-sprite.hop{animation:laghop .34s ease-out}
+@keyframes lagin{from{opacity:0;transform:translateY(24px)}}
+@keyframes laghop{40%{transform:translateY(-14px)}}
+@keyframes lagbob{50%{transform:translateY(3px)}}
+@media (max-width:620px){
+  /* phones: the header wraps, so the menu hangs from the right edge of the header instead of its button */
+  .bar{position:relative}
+  .menuwrap{position:static}
+  /* the character stands on the right, where it hides less of the left-aligned text */
+  .lag-wrap{bottom:12px;width:calc(100% - 24px)}
+  .lag.lag-up .lag-wrap{top:12px}
+  .lag-sprite,.lag.lag-up .lag-sprite{left:auto;right:2px;height:clamp(120px,27vh,220px)}
+  .lag-name{left:auto;right:14px}
+  .lag-skip{right:auto;left:12px}
+  .lag-box{padding:22px 16px 16px}
+  .lag-text{font-size:.98rem;line-height:1.8}
+}
+@media (prefers-reduced-motion: reduce){.lag-sprite.enter,.lag-sprite.hop,.lag-more{animation:none}.lag-spot{transition:none}}
 @media (prefers-reduced-motion: reduce){*{scroll-behavior:auto!important;transition:none!important}}
 </style>

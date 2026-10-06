@@ -51,6 +51,144 @@ const equator = { type: 'LineString', coordinates: d3.range(-180, 181, 3).map(l 
 const tropics = { type: 'MultiLineString', coordinates: [23.44, -23.44].map(la => d3.range(-180, 181, 3).map(l => [l, la])) };
 const fbounds = fc.features.map(f => ({ f, b: d3.geoBounds(f) }));
 const disputed = fc.features.filter(f => placeById.get(f.id) && placeById.get(f.id).disp);
+
+/* ---------------- level of detail ---------------- */
+// While zoomed out one screen pixel spans tens of kilometres, so coastlines and borders are
+// drawn from simplified copies of the map (Douglas-Peucker on each topology arc, so shared
+// borders stay shared and neighbours still meet). Clicks always test the full-detail shapes.
+const LOD_EPS = [0.1, 0.03];   // degrees kept by the two simplified levels
+// Douglas-Peucker on the sphere (eps in degrees): d3 draws every segment as a great circle, so the
+// error is measured from that circle, not in flat lon/lat (where a border along a parallel would
+// collapse into one long chord)
+function dpArc(pts, eps) {
+  const n = pts.length;
+  if (n <= 3) return pts;
+  const V = new Float64Array(n * 3);
+  for (let i = 0; i < n; i++) {
+    const l = pts[i][0] * RAD, p = pts[i][1] * RAD, c = Math.cos(p);
+    V[3 * i] = c * Math.cos(l); V[3 * i + 1] = c * Math.sin(l); V[3 * i + 2] = Math.sin(p);
+  }
+  const chord = (i, j) => Math.hypot(V[3 * i] - V[3 * j], V[3 * i + 1] - V[3 * j + 1], V[3 * i + 2] - V[3 * j + 2]);
+  // distance of point i from the great-circle segment a-b (about the angle in radians, for small ones)
+  function dist(i, a, b) {
+    const ax = V[3 * a], ay = V[3 * a + 1], az = V[3 * a + 2], bx = V[3 * b], by = V[3 * b + 1], bz = V[3 * b + 2];
+    const px = V[3 * i], py = V[3 * i + 1], pz = V[3 * i + 2];
+    const nx = ay * bz - az * by, ny = az * bx - ax * bz, nz = ax * by - ay * bx, len = Math.hypot(nx, ny, nz);
+    if (len < 1e-12) return chord(i, a);
+    // beyond either end of the segment: distance to the nearer end
+    if ((ay * pz - az * py) * nx + (az * px - ax * pz) * ny + (ax * py - ay * px) * nz < 0 ||
+        (py * bz - pz * by) * nx + (pz * bx - px * bz) * ny + (px * by - py * bx) * nz < 0) return Math.min(chord(i, a), chord(i, b));
+    return Math.abs(nx * px + ny * py + nz * pz) / len;
+  }
+  const tol = eps * RAD;
+  const keep = new Uint8Array(n); keep[0] = keep[n - 1] = 1;
+  const closed = pts[0][0] === pts[n - 1][0] && pts[0][1] === pts[n - 1][1];
+  const stack = [];
+  if (closed) {   // a ring: anchor it at the point farthest from its start as well
+    let far = 1, fd = -1;
+    for (let i = 1; i < n - 1; i++) { const d = chord(i, 0); if (d > fd) { fd = d; far = i; } }
+    keep[far] = 1; stack.push([0, far], [far, n - 1]);
+  } else stack.push([0, n - 1]);
+  let kept = 2 + (closed ? 1 : 0);
+  while (stack.length) {
+    const [a, b] = stack.pop();
+    let idx = -1, md = tol, fi = -1, fd = -1;
+    for (let i = a + 1; i < b; i++) {
+      const d = dist(i, a, b);
+      if (d > md) { md = d; idx = i; }
+      if (d > fd) { fd = d; fi = i; }
+    }
+    // an open arc never shrinks to just its two ends: a small island made of two arcs would
+    // otherwise become a ring with no area, which d3 fills as the whole globe at the horizon
+    if (idx < 0 && kept === 2 && !closed && fi > 0) idx = fi;
+    if (idx >= 0) { keep[idx] = 1; kept++; stack.push([a, idx], [idx, b]); }
+  }
+  const out = [];
+  for (let i = 0; i < n; i++) if (keep[i]) out.push(pts[i]);
+  if (closed && out.length < 4) return pts;   // keep small islands whole rather than collapse them
+  return out;
+}
+function simplifyTopology(t, eps) {
+  const tr = t.transform;
+  const arcs = t.arcs.map(arc => {
+    let x = 0, y = 0;
+    const abs = tr ? arc.map(p => { x += p[0]; y += p[1]; return [x * tr.scale[0] + tr.translate[0], y * tr.scale[1] + tr.translate[1]]; }) : arc;
+    return dpArc(abs, eps);
+  });
+  return { type: 'Topology', objects: t.objects, arcs };
+}
+// d3 fills the whole globe with a ring that is inside out or has no area once it reaches the
+// horizon. Simplifying can make such rings, and some outlines in the data have "spikes" (the line
+// runs out and straight back) that leave slivers with no area. So repeated points and spikes are
+// taken out of every ring, and rings that are still flat or inside out are dropped.
+function cleanRing(r) {
+  const same = (a, b) => a[0] === b[0] && a[1] === b[1];
+  // b is a repeat of a neighbour, or the line turns straight back at b
+  const spike = (a, b, c) => {
+    if (same(a, b) || same(b, c)) return true;
+    const ux = b[0] - a[0], uy = b[1] - a[1], vx = c[0] - b[0], vy = c[1] - b[1];
+    return ux * vx + uy * vy < 0 && Math.abs(ux * vy - uy * vx) <= 1e-6 * Math.hypot(ux, uy) * Math.hypot(vx, vy);
+  };
+  const st = [];
+  for (let i = 0; i < r.length - 1; i++) {
+    st.push(r[i]);
+    while (st.length >= 3 && spike(st[st.length - 3], st[st.length - 2], st[st.length - 1])) st.splice(st.length - 2, 1);
+  }
+  while (st.length >= 3) {   // where the ring closes
+    const n = st.length;
+    if (spike(st[n - 1], st[0], st[1])) st.shift();
+    else if (spike(st[n - 2], st[n - 1], st[0])) st.pop();
+    else if (same(st[n - 1], st[0])) st.pop();
+    else break;
+  }
+  if (st.length < 3) return null;
+  st.push(st[0]);
+  return st;
+}
+function polyOK(p) {
+  const outer = cleanRing(p[0]);
+  if (!outer) return null;
+  const q = [outer, ...p.slice(1).map(cleanRing).filter(Boolean)];
+  const a = d3.geoArea({ type: 'Polygon', coordinates: q });
+  return a > 1e-13 && a <= 2 * Math.PI ? q : null;
+}
+function dropInsideOut(f) {
+  const g = f.geometry;
+  if (!g) return f;
+  if (g.type === 'Polygon') { const q = polyOK(g.coordinates); if (q) g.coordinates = q; else f.geometry = null; }
+  else if (g.type === 'MultiPolygon') { g.coordinates = g.coordinates.map(polyOK).filter(Boolean); if (!g.coordinates.length) f.geometry = null; }
+  return f;
+}
+// the land as separate landmasses with no inner borders: filling one huge path with every country
+// in it is slow, and filling countries one by one leaves faint seams between them
+function landPieces(t) {
+  return topojson.merge(t, t.objects.countries.geometries).coordinates
+    .map(polyOK).filter(Boolean).map(c => ({ type: 'Polygon', coordinates: c }));
+}
+const lodLevels = [null, null, { fc, classFC, borders, coast, featById, disputed, land: null }];
+function lodMap(level) {
+  if (lodLevels[level]) return lodLevels[level];
+  const st = simplifyTopology(topo, LOD_EPS[level]);
+  const f2 = topojson.feature(st, st.objects.countries);
+  f2.features.forEach(dropInsideOut);
+  const byId = new Map(f2.features.map(f => [f.id, f]));
+  return (lodLevels[level] = {
+    fc: f2,
+    land: landPieces(st),
+    classFC: [0, 1, 2, 3, 4].map(k => ({ type: 'FeatureCollection', features: f2.features.filter((f, i) => colorOf[i] === k) })),
+    borders: cleanMesh(topojson.mesh(st, st.objects.countries, (a, b) => a !== b)),
+    coast: cleanMesh(topojson.mesh(st, st.objects.countries, (a, b) => a === b)),
+    featById: byId,
+    disputed: disputed.map(f => byId.get(f.id)).filter(Boolean)
+  });
+}
+// which copy to draw at projection scale R (pixels per radian): error stays under ~0.6px
+function lodFor(R) {
+  const degPx = 57.2958 / R;
+  if (fastMotion || degPx > LOD_EPS[0] / 0.6) return 0;
+  if (degPx > LOD_EPS[1] / 0.6) return 1;
+  return 2;
+}
 const labelPlaces = D.places.filter(p => !p.pt).sort((a, b) => b.a - a.a);
 const markerPlaces = D.places.filter(p => p.a < 1.5e-5 && (p.un || (p.d && p.d.length)));
 const shufflePlaces = D.places.filter(p => p.d && p.d.length);
@@ -101,7 +239,9 @@ let rot = [-136, -28], zoom = 1;
 const ZMIN = 0.75, ZMAX = 14;
 // Large, high-density screens are capped to a pixel budget so a frame costs about the
 // same on a PC as on a phone; while the globe spins fast the budget drops further.
-const PX_REST = 2.2e6, PX_SPIN = 0.9e6;
+// While the map moves (drag, fling, zoom, auto-rotation) a slightly lower budget keeps the
+// frame rate up; the full budget comes back as soon as it stops.
+const PX_REST = 2.2e6, PX_MOVE = 1.3e6, PX_SPIN = 0.9e6;
 let pxBudget = PX_REST, RDPR = DPR;
 function applyRes() {
   RDPR = Math.min(DPR, Math.sqrt(pxBudget / (W * H)));
@@ -228,27 +368,26 @@ function draw() {
   ctx.setTransform(RDPR, 0, 0, RDPR, 0, 0);
   ctx.clearRect(0, 0, W, H);
   placed.length = 0;
-  if (!flat && R < Math.hypot(W, H)) {
-    const g = ctx.createRadialGradient(cx, cy, R * 0.96, cx, cy, R * 1.13);
-    g.addColorStop(0, C.glow); g.addColorStop(1, 'rgba(0,0,0,0)');
-    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(cx, cy, R * 1.13, 0, TAU); ctx.fill();
+  // while zooming the size changes every frame, so painting straight onto the canvas is cheaper
+  // than refreshing the cached layers each time
+  layers.direct = Math.abs(R - layers.lastR) > 1e-6; layers.lastR = R;
+  if (!flat) { if (layers.direct) paintBack(ctx, cx, cy, R); else blit(globeLayers(cx, cy, R).back); }
+  else {
+    const og = ctx.createLinearGradient(0, 0, 0, H); og.addColorStop(0, C.sea1); og.addColorStop(1, C.sea2);
+    ctx.beginPath(); path({ type: 'Sphere' }); ctx.fillStyle = og; ctx.fill();
   }
-  let og;
-  if (flat) { og = ctx.createLinearGradient(0, 0, 0, H); og.addColorStop(0, C.sea1); og.addColorStop(1, C.sea2); }
-  else { og = ctx.createRadialGradient(cx - R * 0.35, cy - R * 0.4, R * 0.05, cx, cy, R); og.addColorStop(0, C.sea1); og.addColorStop(1, C.sea2); }
-  ctx.beginPath(); path({ type: 'Sphere' }); ctx.fillStyle = og; ctx.fill();
   ctx.beginPath(); path(graticule); ctx.strokeStyle = C.grat; ctx.lineWidth = 0.6; ctx.stroke();
   if (world === 'history') {
     drawHistory(R, c);
     drawSphereEdge(cx, cy, R);
     if (spinPhase === 'spin') drawNeedle(cx, cy);
     drawHistoryLabels(R, c);
-    if (!flat && R * 1.1 < Math.min(W, H) / 2 + 30) drawBezel(cx, cy, R);
     updateCoords();
     return;
   }
-  for (let k = 0; k < 5; k++) { ctx.beginPath(); path(classFC[k]); ctx.fillStyle = C.land[k]; ctx.fill(); }
-  if (!fastMotion) for (const f of disputed) fillFeature(f, hatch);
+  const L = lodMap(lodFor(R));
+  for (let k = 0; k < 5; k++) { ctx.beginPath(); path(L.classFC[k]); ctx.fillStyle = C.land[k]; ctx.fill(); }
+  if (!fastMotion) for (const f of L.disputed) fillFeature(f, hatch);
 
   const v = curView();
   const asking = viewAsking(v);
@@ -259,12 +398,12 @@ function draw() {
   const hideId = hideName && tPlace ? tPlace.id : null;
   const nameShown = v && showT && (v.state === 'answered' || !v.hideName);
 
-  if (hoverId && !asking) { const f = featById.get(hoverId); if (f) fillFeature(f, C.hover); }
-  if (mode === 'explore' && sel && sel.type === 'place' && featById.get(sel.id)) fillFeature(featById.get(sel.id), C.hilite);
-  if (showT && tPlace && featById.get(tPlace.id)) fillFeature(featById.get(tPlace.id), tCol);
+  if (hoverId && !asking) { const f = L.featById.get(hoverId); if (f) fillFeature(f, C.hover); }
+  if (mode === 'explore' && sel && sel.type === 'place' && L.featById.get(sel.id)) fillFeature(L.featById.get(sel.id), C.hilite);
+  if (showT && tPlace && L.featById.get(tPlace.id)) fillFeature(L.featById.get(tPlace.id), tCol);
 
-  ctx.beginPath(); path(borders); ctx.strokeStyle = C.border; ctx.lineWidth = zoom > 3 ? 0.9 : 0.6; ctx.stroke();
-  ctx.beginPath(); path(coast); ctx.strokeStyle = C.coast; ctx.lineWidth = 0.75; ctx.stroke();
+  ctx.beginPath(); path(L.borders); ctx.strokeStyle = C.border; ctx.lineWidth = zoom > 3 ? 0.9 : 0.6; ctx.stroke();
+  ctx.beginPath(); path(L.coast); ctx.strokeStyle = C.coast; ctx.lineWidth = 0.75; ctx.stroke();
   drawSphereEdge(cx, cy, R);
 
   for (const p of markerPlaces) {
@@ -339,7 +478,6 @@ function draw() {
       label(txt, x, y, s, { family: C.fDisp, weight: 600, color: C.seaInk, halo: false });
     }
   }
-  if (!flat && R * 1.1 < Math.min(W, H) / 2 + 30) drawBezel(cx, cy, R);
   updateCoords();
 }
 // equator and tropics, the shading that makes the globe look round, and its rim
@@ -348,13 +486,45 @@ function drawSphereEdge(cx, cy, R) {
   ctx.setLineDash([6, 4]); ctx.lineWidth = 1; ctx.beginPath(); path(equator); ctx.stroke();
   ctx.setLineDash([1.5, 4]); ctx.lineWidth = 1; ctx.beginPath(); path(tropics); ctx.stroke();
   ctx.restore();
-  if (!flat) {
-    const sg = ctx.createRadialGradient(cx - R * 0.25, cy - R * 0.3, R * 0.35, cx, cy, R);
-    sg.addColorStop(0, 'rgba(255,255,255,0.06)'); sg.addColorStop(0.7, 'rgba(0,0,0,0)'); sg.addColorStop(1, C.shade);
-    ctx.beginPath(); path({ type: 'Sphere' }); ctx.fillStyle = sg; ctx.fill();
-  }
+  if (!flat) { if (layers.direct) paintFront(ctx, cx, cy, R); else blit(globeLayers(cx, cy, R).front); return; }
   ctx.beginPath(); path({ type: 'Sphere' }); ctx.strokeStyle = C.coast; ctx.globalAlpha = 0.35; ctx.lineWidth = 1; ctx.stroke(); ctx.globalAlpha = 1;
 }
+// The globe's glow, sea gradient, shading, rim and brass bezel do not change while it turns,
+// so they are painted once into two offscreen layers (behind and in front of the map) and
+// copied each frame; they are repainted only when the size, zoom or theme changes.
+const layers = { key: '', back: document.createElement('canvas'), front: document.createElement('canvas'), lastR: 0, direct: true };
+function globeLayers(cx, cy, R) {
+  const key = [canvas.width, canvas.height, RDPR, cx, cy, R.toFixed(2), C.sea1, C.sea2, C.glow, C.shade, C.coast, C.brass].join('|');
+  if (layers.key === key) return layers;
+  layers.key = key;
+  const prep = c => {
+    if (c.width !== canvas.width || c.height !== canvas.height) { c.width = canvas.width; c.height = canvas.height; }
+    const g = c.getContext('2d');
+    g.setTransform(1, 0, 0, 1, 0, 0); g.clearRect(0, 0, c.width, c.height); g.setTransform(RDPR, 0, 0, RDPR, 0, 0);
+    return g;
+  };
+  paintBack(prep(layers.back), cx, cy, R);
+  paintFront(prep(layers.front), cx, cy, R);
+  return layers;
+}
+function paintBack(b, cx, cy, R) {
+  if (R < Math.hypot(W, H)) {
+    const g = b.createRadialGradient(cx, cy, R * 0.96, cx, cy, R * 1.13);
+    g.addColorStop(0, C.glow); g.addColorStop(1, 'rgba(0,0,0,0)');
+    b.fillStyle = g; b.beginPath(); b.arc(cx, cy, R * 1.13, 0, TAU); b.fill();
+  }
+  const og = b.createRadialGradient(cx - R * 0.35, cy - R * 0.4, R * 0.05, cx, cy, R);
+  og.addColorStop(0, C.sea1); og.addColorStop(1, C.sea2);
+  b.beginPath(); b.arc(cx, cy, R, 0, TAU); b.fillStyle = og; b.fill();
+}
+function paintFront(f, cx, cy, R) {
+  const sg = f.createRadialGradient(cx - R * 0.25, cy - R * 0.3, R * 0.35, cx, cy, R);
+  sg.addColorStop(0, 'rgba(255,255,255,0.06)'); sg.addColorStop(0.7, 'rgba(0,0,0,0)'); sg.addColorStop(1, C.shade);
+  f.beginPath(); f.arc(cx, cy, R, 0, TAU); f.fillStyle = sg; f.fill();
+  f.beginPath(); f.arc(cx, cy, R, 0, TAU); f.strokeStyle = C.coast; f.globalAlpha = 0.35; f.lineWidth = 1; f.stroke(); f.globalAlpha = 1;
+  if (R * 1.1 < Math.min(W, H) / 2 + 30) drawBezel(cx, cy, R, f);
+}
+function blit(c) { ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.drawImage(c, 0, 0); ctx.restore(); }
 function drawNeedle(cx, cy) {
   ctx.save();
   ctx.strokeStyle = C.ink; ctx.lineWidth = 1.5;
@@ -365,7 +535,7 @@ function drawNeedle(cx, cy) {
   ctx.fillStyle = C.brass; ctx.fill(); ctx.strokeStyle = C.ink; ctx.lineWidth = 1.2; ctx.stroke();
   ctx.restore();
 }
-function drawBezel(cx, cy, R) {
+function drawBezel(cx, cy, R, ctx) {
   const r = R * 1.045 + 6;
   ctx.save();
   ctx.strokeStyle = C.brass; ctx.lineWidth = 3; ctx.globalAlpha = 0.9;
@@ -509,7 +679,7 @@ function endAnim() {
 }
 function flyTo(o, opt = {}) { animateTo(o.lp[0], o.lp[1], opt.zoom || zoomFor(o), opt); }
 
-let frameN = 0, lastT = performance.now(), lastLon = 0, fastMotion = false;
+let frameN = 0, lastT = performance.now(), lastLon = 0, fastMotion = false, turning = false, lastTurn = 0;
 function frame(t) {
   const dt = Math.min(64, t - lastT); lastT = t; frameN++;
   const moved = Math.abs(((rot[0] - lastLon) % 360 + 540) % 360 - 180);
@@ -526,8 +696,12 @@ function frame(t) {
     dirty = true;
   } else if (autoSpin && !flat && !drag && !pinch && !TS.play && t - lastInteract > 6000 && !curView() && !histBusy() && document.visibilityState === 'visible') {
     rot[0] += dt * 0.0045 / Math.max(1, zoom * 0.8);
-    dirty = true;
+    dirty = true; turning = true;
   }
+  if (anim || vel || (drag && drag.moved) || pinch) turning = true;
+  if (turning) lastTurn = t;
+  if (spinPhase !== 'spin') setBudget(turning || t - lastTurn < 160 ? PX_MOVE : PX_REST);
+  turning = false;
   if (spinPhase === 'spin' && !needleMask && frameN % 3 === 0) {
     const n = nameAt(center());
     if (n !== needleName) { needleName = n; $('#readout').textContent = '▼ ' + n; }
@@ -878,7 +1052,7 @@ function updateSpinLabel() {
   const st = mode === 'hquiz' ? HQ.state : SQ.state;
   $('#spin-label').textContent = mode === 'explore' || mode === 'hist' ? 'シャッフル' : (st === 'answered' ? '次の問題' : st === 'asking' ? 'この問題をとばす' : '回して出題');
 }
-MODES.forEach(k => { $('#tab-' + k).onclick = () => { if (!spinning) setMode(k); }; });
+MODES.forEach(k => { $('#tab-' + k).onclick = () => { if (!spinning) { setMode(k); lagAuto(k); } }; });
 
 /* ---------------- display modes (⋯ menu) ---------------- */
 const WORLDS = {
@@ -917,6 +1091,7 @@ function setWorld(w) {
   else setMode(mode, true);
   if (!/^#room-/.test(location.hash)) { try { history.replaceState(null, '', location.pathname + location.search + W0.hash); } catch (e) { /* file:// */ } }
   dirty = true;
+  lagAuto(w === 'modern' ? 'base' : w);
 }
 const menuBtn = $('#menu-btn'), menu = $('#menu');
 function openMenu(v) { menu.hidden = !v; menuBtn.setAttribute('aria-expanded', String(v)); }
@@ -925,7 +1100,7 @@ menu.addEventListener('click', e => {
   const w = e.target.closest('[data-world]');
   if (w) { openMenu(false); setWorld(w.dataset.world); return; }
   const sh = e.target.closest('[data-shape]');
-  if (sh) { setFlat(sh.dataset.shape === 'flat'); if (mode === 'explore') renderExplore(); }
+  if (sh) { setFlat(sh.dataset.shape === 'flat'); if (mode === 'explore') renderExplore(); if (flat) lagAuto('flat'); }
 });
 document.addEventListener('click', e => { if (!menu.hidden && !e.target.closest('.menuwrap')) openMenu(false); });
 document.addEventListener('keydown', e => { if (e.key === 'Escape' && !menu.hidden) { openMenu(false); menuBtn.focus(); } });
@@ -1443,7 +1618,7 @@ if (QUIZ.extraText) rebuildExtra();
 $('#view-quiz').addEventListener('click', e => {
   const t = e.target;
   if (t.closest('#q-start') || t.closest('#q-next')) { nextQuestion(); return; }
-  if (t.closest('#q-battle')) { setMode('battle'); return; }
+  if (t.closest('#q-battle')) { setMode('battle'); lagAuto('battle'); return; }
   if (t.closest('#q-giveup')) { if (SQ.state === 'asking') { SQ.token++; finishSolo(false, ''); } return; }
   if (t.closest('#q-hint')) { if (SQ.state === 'asking' && SQ.cur.hint < maxHint(SQ.cur.q)) { SQ.cur.hint++; rerenderQuiz(); } return; }
   if (t.closest('#q-explore')) { const o = locObj(SQ.cur.q.loc); setMode('explore'); select(o); return; }
@@ -1651,6 +1826,7 @@ function hostNext() {
   B.hostTimer = setTimeout(() => hostReveal(r), LEAD_MS + SPIN_TOTAL + INTRO_MS + readPlan(q.text, msPerChar).total + B.settings.time * 1000 + 2500);
 }
 function onQuestion(m) {
+  if (Lag.on) lagSkip();   // a round is starting: the guide must not cover it
   B.round = m.round; B.total = m.total; B.qp = m.q; B.q = fromWire(m.q); B.timeLimit = m.timeLimit;
   B.msPerChar = m.msPerChar || READ_SPEEDS.normal;
   B.answers = new Map(); B.myAns = null; B.results = null; B.err = ''; B.stage = ''; B.read = null;
@@ -1957,7 +2133,7 @@ function histEnter() {
       TS.events = idx.events.map(([y, lon, lat, title, desc, pol]) => ({ y, lp: [lon, lat], title, desc, pol }));
       TS.loading = null;
       buildTicks(); buildHQPool();
-      if (world === 'history') { setYear(TS.year, { force: true }); renderHist(); if (mode === 'hquiz') renderHQuiz(); }
+      if (world === 'history') { setYear(TS.year, { force: true }); renderHist(); if (mode === 'hquiz') { renderHQuiz(); lagAuto('hquiz'); } }
     }).catch(() => {
       TS.loading = null;
       TS.err = location.protocol.startsWith('http') ? '歴史地図のデータを読み込めませんでした。通信状況を確かめて、もう一度開いてください。' : '歴史地図はファイルを直接開くと読み込めません。公開ページ(Vercel)か、ローカルのWebサーバーから開いてください。';
@@ -1978,10 +2154,15 @@ function loadChunk(c) {
   if (ch) return ch.promise;
   ch = { ready: false, rows: null };
   ch.promise = fetch(histUrl(file)).then(r => { if (!r.ok) throw new Error(r.status); return r.json(); }).then(topo => {
-    const feats = topojson.feature(topo, topo.objects.p).features;
-    ch.rows = feats.filter(f => f.geometry).map(f => {
+    const feats = topojson.feature(topo, topo.objects.p).features.map(dropInsideOut);
+    // simplified copies for drawing while zoomed out (same order as the full features)
+    const lods = LOD_EPS.map(eps => { const st = simplifyTopology(topo, eps); return topojson.feature(st, st.objects.p).features.map(dropInsideOut); });
+    ch.rows = [];
+    feats.forEach((f, k) => {
+      if (!f.geometry) return;
       const q = f.properties;
-      return { p: TS.P[q.i], f: q.f, t: q.t, lp: q.l, a: q.a, r: q.r, feat: f, b: null };
+      // a: area of the shape; o: its area before overlaps were cut out (orders drawing and clicks)
+      ch.rows.push({ p: TS.P[q.i], f: q.f, t: q.t, lp: q.l, a: q.a, o: q.o != null ? q.o : q.a, r: q.r, feat: f, lod: [lods[0][k], lods[1][k], f], b: null });
     });
     ch.ready = true;
     return ch;
@@ -1991,12 +2172,13 @@ function loadChunk(c) {
   return ch.promise;
 }
 // rows (polity shapes) that exist in year y, biggest first so small ones are drawn on top
+// (by the area before the build cut overlaps out, so a cut shape keeps its place in the order)
 function rowsAt(y) {
   const ch = TS.chunks.get(chunkOf(y)[2]);
   if (!ch || !ch.ready) return null;
   const leaf = [], grp = [];
   for (const r of ch.rows) if (r.f <= y && y <= r.t) (r.p.g ? grp : leaf).push(r);
-  leaf.sort((a, b) => b.a - a.a);
+  leaf.sort((a, b) => b.o - a.o);
   return { y, leaf, grp };
 }
 function ensureYear(y) {
@@ -2046,7 +2228,7 @@ function rowAt(set, ll) {
   for (const r of set.leaf) {
     if (!r.b) r.b = d3.geoBounds(r.feat);
     if (!inBox(r.b, ll)) continue;
-    if ((!best || r.a < best.a) && d3.geoContains(r.feat, ll)) best = r;
+    if ((!best || r.o < best.o) && d3.geoContains(r.feat, ll)) best = r;
   }
   return best;
 }
@@ -2060,12 +2242,13 @@ const cmpGrab = x => world === 'history' && TS.cmp && Math.abs(x - W * TS.cmpX) 
 
 /* ---------- drawing ---------- */
 function histView() { return mode === 'hquiz' && HQ.view ? HQ.view : null; }
-function drawLayer(set, isLeft) {
+function drawLayer(set, isLeft, lvl) {
   const v = histView();
   const asking = v && v.state !== 'answered';
   const tCol = v ? (v.state === 'answered' ? (v.ok === true ? C.ok : v.ok === false ? C.ng : C.target) : C.target) : null;
+  const shape = r => (r.lod[lvl] && r.lod[lvl].geometry) ? r.lod[lvl] : r.feat;
   for (const r of set.leaf) {
-    ctx.beginPath(); path(r.feat);
+    ctx.beginPath(); path(shape(r));
     let fill = C.hist[r.p.c] || C.hist[0];
     if (!isLeft && v && v.p === r.p && v.state !== 'spinning') fill = tCol;
     else if (!isLeft && !v && TS.sel === r.p) fill = C.hilite;
@@ -2075,25 +2258,28 @@ function drawLayer(set, isLeft) {
   }
   if (fastMotion) return;
   ctx.save(); ctx.setLineDash([5, 3]); ctx.strokeStyle = C.hGroup; ctx.lineWidth = 1.5;
-  for (const r of set.grp) { ctx.beginPath(); path(r.feat); ctx.stroke(); }
+  for (const r of set.grp) { ctx.beginPath(); path(shape(r)); ctx.stroke(); }
   ctx.restore();
   const sr = !isLeft && !v && TS.sel ? rowOf(TS.sel, set) : null;
-  if (sr) { ctx.beginPath(); path(sr.feat); ctx.strokeStyle = C.ink; ctx.lineWidth = 1.6; ctx.stroke(); }
+  if (sr) { ctx.beginPath(); path(shape(sr)); ctx.strokeStyle = C.ink; ctx.lineWidth = 1.6; ctx.stroke(); }
 }
 function drawHistory(R, c) {
   // land nobody is recorded as ruling stays a pale grey
   // (the shapes were already cut to this coastline when the data was built)
-  ctx.beginPath(); path(fc); ctx.fillStyle = C.hNone; ctx.fill();
+  const lvl = lodFor(R), L = lodMap(lvl);
+  if (!L.land) L.land = landPieces(topo);
+  ctx.fillStyle = C.hNone;
+  for (const p of L.land) { ctx.beginPath(); path(p); ctx.fill(); }
   if (TS.cur) {
     if (TS.cmp && TS.cmpCur) {
       const xd = W * TS.cmpX;
-      ctx.save(); ctx.beginPath(); ctx.rect(0, 0, xd, H); ctx.clip(); drawLayer(TS.cmpCur, true); ctx.restore();
-      ctx.save(); ctx.beginPath(); ctx.rect(xd, 0, W - xd, H); ctx.clip(); drawLayer(TS.cur, false); ctx.restore();
-    } else drawLayer(TS.cur, false);
+      ctx.save(); ctx.beginPath(); ctx.rect(0, 0, xd, H); ctx.clip(); drawLayer(TS.cmpCur, true, lvl); ctx.restore();
+      ctx.save(); ctx.beginPath(); ctx.rect(xd, 0, W - xd, H); ctx.clip(); drawLayer(TS.cur, false, lvl); ctx.restore();
+    } else drawLayer(TS.cur, false, lvl);
   }
-  ctx.beginPath(); path(coast); ctx.strokeStyle = C.coast; ctx.lineWidth = 0.75; ctx.stroke();
+  ctx.beginPath(); path(L.coast); ctx.strokeStyle = C.coast; ctx.lineWidth = 0.75; ctx.stroke();
   if (TS.modern && !fastMotion) {
-    ctx.save(); ctx.setLineDash([4, 3]); ctx.beginPath(); path(borders); ctx.strokeStyle = C.hModern; ctx.lineWidth = zoom > 3 ? 1.1 : 0.85; ctx.stroke(); ctx.restore();
+    ctx.save(); ctx.setLineDash([4, 3]); ctx.beginPath(); path(L.borders); ctx.strokeStyle = C.hModern; ctx.lineWidth = zoom > 3 ? 1.1 : 0.85; ctx.stroke(); ctx.restore();
   }
 }
 function drawHistoryLabels(R, c) {
@@ -2432,7 +2618,7 @@ function histHomeHTML(Y) {
   const evs = TS.events.filter(e => e.y === Y);
   const prev = [...TS.events].reverse().find(e => e.y < Y), next = TS.events.find(e => e.y > Y);
   const seen = new Set(), big = [];
-  if (TS.cur) for (const r of TS.cur.leaf) { if (!seen.has(r.p)) { seen.add(r.p); big.push(r); } if (big.length >= 18) break; }
+  if (TS.cur) for (const r of TS.cur.leaf.slice().sort((x, y) => y.a - x.a)) { if (!seen.has(r.p)) { seen.add(r.p); big.push(r); } if (big.length >= 18) break; }
   const cards = allCards(), got = cards.filter(c => TS.cards.has(c.key)).length;
   return `<div><p class="eyebrow">タイムスリップ · ${esc(jpEraHTML(Y).replace(/<\/?b>/g, ''))}</p><h2 class="pname">${fmtYear(Y)}の世界</h2></div>
     <p class="lead">下の年表で1年ずつ時代を動かせます。地図の国をクリックすると図鑑が開きます。</p>
@@ -2677,6 +2863,270 @@ $('#view-hquiz').addEventListener('click', e => {
 });
 $('#view-hquiz').addEventListener('submit', e => { e.preventDefault(); hqAnswer(($('#hans') || {}).value || ''); });
 
+/* ================= guide: 銀河義賊ラグ☆ジュアリ～ ================= */
+// A novel-game style guide: the character stands on a text box at the bottom (or top) of the
+// screen and changes pose between lines, while a spotlight shows the part being explained.
+// The first visit asks whether to hear how things work; each mode explains itself the first
+// time it is opened. What has been shown is remembered per browser.
+const LAG_POSES = ['point', 'jaki', 'douzo', 'good'];   // ここだ! / ジャキーン! / どうぞ! / いいね!
+const lagSeen = store.get('lag', {});
+const roomLink = /^#room-/.test(location.hash);
+const lagSave = () => store.set('lag', lagSeen);
+const here = () => isNarrow() ? '下' : '右';
+// the guide never interrupts a spin, a question being asked, or an online battle
+const soloBusy = () => ['spinning', 'asking'].includes(SQ.state) || ['spinning', 'asking'].includes(HQ.state);
+const lagBlocked = () => spinning || soloBusy() || !!B.net || battleBusy();
+const globeWord = () => flat ? '地図' : '地球儀';
+function lagShowPlace(id) {
+  const p = placeById.get(id); if (!p || lagBlocked()) return;
+  if (mode !== 'explore') setMode('explore');
+  select(p, { fly: true });
+}
+// each script is a list of [pose, text, { spot, do, choices }]; spot is a selector to light up,
+// do runs when the line starts
+const LAG = {
+  hello: () => [
+    ['jaki', 'やあやあ、はじめまして！\n私の名はキャプテン・ヘヴィー・ラグ☆ジュアリ～。泣く子も黙る銀河義賊さ'],
+    ['douzo', `この${globeWord()}でみんなを楽しませるのが、私の仕事。\nさっそく使い方を案内しようか？`, {
+      choices: [
+        ['聞く！', () => lagThen(world === 'history' ? ['history'] : world === 'food' ? ['base', 'food'] : ['base'])],
+        ['あとで', () => { lagSeen.off = true; lagSave(); syncLagMenu(); lagThen(['later']); }]
+      ]
+    }]
+  ],
+  later: () => [
+    ['good', 'オーケー！ モードの紹介もお休みしておこう。\n聞きたくなったら、右上の ⋯ からいつでも呼んでくれたまえ', { spot: '#menu-btn' }]
+  ],
+  base: () => [
+    ['point', `これが私の自慢の${globeWord()}！\nドラッグで${flat ? '自由に動かせる' : 'くるくる回せる'}のさ`, { spot: '#stage', do: () => { if (!lagBlocked()) animateTo(-rot[0] - 40, flat ? -rot[1] : clamp(-rot[1], -30, 30), zoom, { dur: 1300 }); } }],
+    ['jaki', 'ホイールやピンチ、左下の ＋ − で拡大・縮小。\n丸いボタンを押せば、全体の眺めに戻るよ', { spot: '.ov.zoom' }],
+    ['douzo', '国をタップすると、その国のことがわかる。\nちょっとやってみよう', { spot: '#stage' }],
+    ['jaki', '……雪山で遭難しちゃったよー。\n助からないね。寝るしかないね'],
+    ['point', 'いや、まだ助かる！ まだたすかる……\nマダガスカル！ それっ！ここ マダガスカル！', { spot: '#stage', do: () => lagShowPlace('MDG') }],
+    ['good', `……訳わかんねぇだろ！\nでもほら、${here()}にマダガスカルの${world === 'food' ? '郷土料理' : '首都'}や豆知識が出てきたはずさ`, { spot: '#panel' }],
+    ['douzo', '行きたい場所が決まっているなら、ここに国名や都市名を入れてね。\nひらがなでもオーケーさ', { spot: '.search' }],
+    ['jaki', `迷ったらシャッフル！\n${globeWord()}が回って、止まった場所が今日の行き先さ`, { spot: '#spin-wrap' }],
+    ['point', '国名や都市の表示、自動回転、効果音は\nこのボタンで切り替えられるよ', { spot: '.toggles' }],
+    ['douzo', '『クイズ』で腕試し、『対戦』で友達と早押し勝負もできる。\n詳しくは、開いたときに教えよう', { spot: '.tabs' }],
+    ['point', 'そしてここからが本番！\n右上の ⋯ を開くと……', { spot: '#menu-btn' }],
+    ['jaki', '『タイムスリップ』で西暦1年の世界へひとっ飛び！\n1年ずつ、歴史の地図をめくれるのさ', { spot: '[data-world="history"]', do: () => openMenu(true) }],
+    ['douzo', '『ごちそう』は、世界の郷土料理をめぐる特別モード。\nおなかが空いても責任はとらないよ', { spot: '[data-world="food"]', do: () => openMenu(true) }],
+    ['point', '地図の形は、地球儀と平面から選べる', { spot: '.menuseg', do: () => openMenu(true) }],
+    ['good', '説明はここまで！\n困ったら『使い方を聞く』で、いつでも私を呼んでくれたまえ', { spot: '[data-lag="replay"]', do: () => openMenu(true) }],
+    ['jaki', 'さあ、君のハートにレボリューション！\nファンタスティック!!!', { do: () => openMenu(false) }]
+  ],
+  history: () => [
+    ['jaki', `ようこそ、時の旅へ！\nここは西暦${TS.year}年の世界さ`, { spot: '#stage' }],
+    ['point', '下のバーで年を動かせる。ボタンなら1年・10年・100年ずつ。\n年の数字を押せば、直接入力もできるよ', { spot: '#timebar' }],
+    ['douzo', '▶で再生すると、国が生まれては消えていく。\nこれこそ宇宙……', { spot: '#tb-play' }],
+    ['point', `国をタップすると、${here()}に図鑑が開く。\n建国した人や英雄、首都や発明品までぎっしりさ`, { spot: '#panel' }],
+    ['jaki', '図鑑の『興亡を再生』を押せば、\nその国を追いかけながら再生できる', { spot: '#panel' }],
+    ['douzo', '上の『現代の国境』を押すと、\n今の国境線を重ねて見られるよ', { spot: '#t-modern' }],
+    ['point', '『2つの年を比べる』なら、\n昔と今を左右に並べて見比べられるのさ', { spot: '#tb-cmp' }],
+    ['good', '『クイズ』では「この年、ここを支配していたのは？」なんて問題が出る。\n人物を当てると、人物カードが手に入るよ', { spot: '#tab-hquiz' }],
+    ['jaki', 'さあ、歴史の大海原へ出航だ！\nファンタスティック!!!']
+  ],
+  food: () => [
+    ['douzo', 'ごちそうモードへようこそ！\nここでは世界の郷土料理を紹介するよ', { spot: '#stage', do: () => { if (mode === 'battle' && !lagBlocked()) setMode('explore'); } }],
+    ['point', `国を選ぶと、${here()}にその国の郷土料理が並ぶ。\n『作り方』を押せば、レシピを探しに行けるのさ`, { spot: '#panel' }],
+    ['jaki', `今日の晩ごはんに迷ったら、\nシャッフルで${globeWord()}に決めてもらうのもアリだね`, { spot: '#spin-wrap' }],
+    ['good', 'おなかが鳴っても、私のせいじゃないからね！']
+  ],
+  quiz: () => [
+    ['point', `クイズの時間だ！\n『回して出題』を押すと${globeWord()}が回って、止まった場所の問題が出る`, { spot: '#spin-wrap' }],
+    ['douzo', '問題文は少しずつ表示される。\n全部出る前に答えてもオーケー、早応えってやつさ', { spot: '#panel' }],
+    ['jaki', '難易度や地域、4択か入力かは『出題設定』で選べるよ', { spot: '#sq-settings' }],
+    ['good', '連続正解で最高記録を目指そう！\n全問正解したら…… ファンタスティック!!!']
+  ],
+  battle: () => [
+    ['jaki', '対戦モードでは、友達と同じ問題で早押し勝負ができる！', { spot: '#panel' }],
+    ['douzo', '『部屋を作る』を押して、部屋コードを友達に教えよう。\n招待リンクを送るだけでも参加できるよ', { spot: '#b-create' }],
+    ['good', '早く答えるほど高得点。\n泣く子も黙る早押しの腕前、見せてくれたまえ！']
+  ],
+  hquiz: () => [
+    ['point', '歴史クイズだ！\n『地図から』は、その年に止まった場所を支配していた国を答える', { spot: '#panel' }],
+    ['douzo', '『図鑑から』は、建国者や首都、発明なんかの問題。\n人物を答えると、人物カードが手に入るよ', { spot: '#panel' }],
+    ['jaki', '時代も選べるから、得意な時代から攻めてみよう', { spot: '#hq-settings' }],
+    ['good', '集めたカードは図鑑で見られる。\nコンプリート目指してファイトだ！']
+  ],
+  flat: () => [
+    ['douzo', '平面の地図に切り替えたよ。\nドラッグで動かして、ホイールやピンチで拡大できる', { spot: '#stage', do: () => openMenu(false) }],
+    ['jaki', 'でもやっぱり、丸い方がロマンがあると思わないかい？\n戻すときは ⋯ の『地球儀』を押してね', { spot: '#menu-btn' }]
+  ]
+};
+const Lag = { on: false, key: '', lines: [], i: 0, line: null, chars: [], shown: 0, timer: 0, q: [], spotEl: null, spotKey: '', raf: 0, focus: null };
+const lagEl = $('#lag'), lagBox = $('#lag-box'), lagImg = $('#lag-sprite'), lagSpot = $('#lag-spot');
+lagImg.addEventListener('animationend', () => lagImg.classList.remove('enter', 'hop'));
+function lagRun(key) {
+  if (!LAG[key]) return;
+  if (Lag.on) { if (Lag.key !== key && !Lag.q.includes(key)) Lag.q.push(key); return; }
+  if (!lagEl.hidden) return;
+  LAG_POSES.forEach(p => { new Image().src = `img/lag-${p}.webp`; });
+  Lag.on = true; Lag.focus = document.activeElement;
+  hideTip(); stopMotion();
+  lagEl.hidden = false;
+  $('.app').inert = true;   // the page behind can't take focus or be used while the guide talks
+  lagImg.classList.remove('hop'); lagImg.classList.add('enter');
+  lagStart(key);
+  lagBox.focus({ preventScroll: true });
+  if (!Lag.raf) Lag.raf = requestAnimationFrame(lagTick);
+}
+function lagStart(key) {
+  Lag.key = key;
+  if (key !== 'hello' && key !== 'later') { lagSeen[key] = true; lagSave(); }
+  Lag.lines = LAG[key]();
+  lagLine(0);
+}
+function lagLine(i) {
+  if (i >= Lag.lines.length) { lagEnd(); return; }
+  Lag.i = i;
+  const [pose, text, o = {}] = Lag.lines[i];
+  Lag.line = o;
+  if (o.do) o.do();
+  if (lagImg.dataset.pose !== pose) {   // a little hop on each change of pose
+    const had = !!lagImg.dataset.pose;
+    lagImg.dataset.pose = pose; lagImg.src = `img/lag-${pose}.webp`;
+    if (had && !lagImg.classList.contains('enter')) { lagImg.classList.remove('hop'); void lagImg.offsetWidth; lagImg.classList.add('hop'); }
+  }
+  Lag.chars = Array.from(text); Lag.shown = 0;
+  $('#lag-text').textContent = '';
+  $('#lag-live').textContent = text;
+  $('#lag-choices').hidden = true; $('#lag-more').hidden = true;
+  lagSetSpot(o.spot);
+  lastInteract = now();
+  clearTimeout(Lag.timer);
+  if (REDUCED) lagFinishLine(); else lagType();
+}
+function lagType() {
+  if (Lag.shown >= Lag.chars.length) { lagFinishLine(); return; }
+  const ch = Lag.chars[Lag.shown++];
+  $('#lag-text').textContent = Lag.chars.slice(0, Lag.shown).join('');
+  Lag.timer = setTimeout(lagType, '、。！？!?…'.includes(ch) ? 150 : ch === '\n' ? 220 : 34);
+}
+function lagFinishLine() {
+  clearTimeout(Lag.timer);
+  Lag.shown = Lag.chars.length;
+  $('#lag-text').textContent = Lag.chars.join('');
+  const ch = Lag.line && Lag.line.choices;
+  if (ch) {
+    const box = $('#lag-choices');
+    box.innerHTML = ch.map(([label], k) => `<button data-lc="${k}">${esc(label)}</button>`).join('');
+    box.hidden = false;
+    box.querySelector('button').focus({ preventScroll: true });
+  } else $('#lag-more').hidden = false;
+}
+function lagAdvance() {
+  if (!Lag.on) return;
+  if (Lag.shown < Lag.chars.length) { lagFinishLine(); return; }
+  if (Lag.line && Lag.line.choices) return;   // waiting for an answer
+  lagLine(Lag.i + 1);
+}
+// finish this script and go on to the given ones (from a choice)
+function lagThen(keys) { Lag.q.unshift(...keys); lagEnd(); }
+function lagEnd() {
+  clearTimeout(Lag.timer);
+  if (Lag.key === 'hello' || Lag.key === 'later') { lagSeen.asked = true; lagSave(); }
+  const next = Lag.q.shift();
+  if (next) { lagStart(next); return; }
+  Lag.on = false; Lag.key = ''; Lag.spotEl = null; Lag.spotKey = '';
+  lagEl.hidden = true; lagSpot.hidden = true;
+  lagImg.classList.remove('hop', 'enter'); delete lagImg.dataset.pose;
+  openMenu(false);
+  $('.app').inert = false;
+  lastInteract = now();
+  // give focus back: to where it was, to the ⋯ button when the guide was called from the menu
+  // (now closed), or to the current tab when that place has gone (e.g. a hidden view)
+  const f = Lag.focus;
+  if (f && f.focus && document.contains(f) && f.getClientRects().length) f.focus({ preventScroll: true });
+  else if (f && f.closest && f.closest('.menuwrap')) menuBtn.focus({ preventScroll: true });
+  else if (f && f !== document.body) $('#tab-' + mode).focus({ preventScroll: true });
+}
+function lagSkip() {
+  if (Lag.key === 'hello') { lagSeen.asked = true; lagSave(); }
+  Lag.q.length = 0;
+  lagEnd();
+}
+function lagSetSpot(sel) {
+  const el = sel ? document.querySelector(sel) : null;
+  Lag.spotEl = el && el.getClientRects().length ? el : null;
+  Lag.spotKey = '';
+  if (Lag.spotEl) {
+    // bring it into view (phones stack the panel under the globe)
+    const r = Lag.spotEl.getBoundingClientRect();
+    if (r.top < 0 || r.bottom > innerHeight) Lag.spotEl.scrollIntoView({ block: r.height > innerHeight * 0.6 ? 'start' : 'center', behavior: 'auto' });
+  }
+  lagPlace();
+}
+// the text box goes to the top when the lit-up part is in the lower half of the screen
+function lagPlace() {
+  let top = false;
+  if (Lag.spotEl) {
+    const r = Lag.spotEl.getBoundingClientRect();
+    top = r.height < innerHeight * 0.5 && (r.top + r.bottom) / 2 > innerHeight * 0.55;
+  }
+  lagEl.classList.toggle('lag-up', top);
+  lagEl.classList.toggle('lag-dim', !Lag.spotEl);
+}
+function lagTick() {
+  Lag.raf = 0;
+  if (!Lag.on) return;
+  const el = Lag.spotEl;
+  if (el && el.getClientRects().length) {
+    const r = el.getBoundingClientRect(), pad = 6;
+    const x = Math.max(4, r.left - pad), y = Math.max(4, r.top - pad);
+    const w = Math.min(innerWidth - 4, r.right + pad) - x, h = Math.min(innerHeight - 4, r.bottom + pad) - y;
+    const k = `${x | 0},${y | 0},${w | 0},${h | 0}`;
+    if (k !== Lag.spotKey) {
+      const firstShow = lagSpot.hidden;
+      if (firstShow) lagSpot.style.transition = 'none';
+      Object.assign(lagSpot.style, { left: x + 'px', top: y + 'px', width: Math.max(0, w) + 'px', height: Math.max(0, h) + 'px' });
+      lagSpot.hidden = h <= 0 || w <= 0;
+      if (firstShow) { void lagSpot.offsetWidth; lagSpot.style.transition = ''; }
+      Lag.spotKey = k;
+    }
+  } else if (!lagSpot.hidden) { lagSpot.hidden = true; lagEl.classList.add('lag-dim'); }
+  Lag.raf = requestAnimationFrame(lagTick);
+}
+lagEl.addEventListener('click', e => {
+  e.stopPropagation();   // keep the ⋯ menu open while it is being explained
+  const c = e.target.closest('[data-lc]');
+  if (c) {
+    const fn = Lag.line && Lag.line.choices && Lag.line.choices[+c.dataset.lc];
+    lagBox.focus({ preventScroll: true });   // the choice buttons are about to disappear
+    if (fn) fn[1]();
+    return;
+  }
+  if (e.target.closest('#lag-skip')) { lagSkip(); return; }
+  lagAdvance();
+});
+// on window, so it runs before the page's own shortcuts (typing jumps to the answer box, Enter = next question)
+addEventListener('keydown', e => {
+  if (!Lag.on) return;
+  const onBtn = e.target.closest && e.target.closest('#lag button');
+  if (e.key === 'Escape') { e.preventDefault(); e.stopImmediatePropagation(); lagSkip(); return; }
+  if ((e.key === 'Enter' || e.key === ' ' || e.key === 'ArrowRight') && !onBtn) { e.preventDefault(); e.stopImmediatePropagation(); lagAdvance(); return; }
+  if (e.key === 'Tab') {   // keep focus inside the guide
+    const f = [lagBox, ...lagEl.querySelectorAll('button:not([hidden])')].filter(x => x.getClientRects().length);
+    const i = f.indexOf(document.activeElement);
+    e.preventDefault(); f[(i + (e.shiftKey ? f.length - 1 : 1)) % f.length].focus();
+  }
+}, true);
+addEventListener('resize', () => { if (Lag.on) { Lag.spotKey = ''; lagPlace(); } });
+// the first time a mode is opened (after the first-visit question has been answered)
+function lagAuto(key) {
+  if (!LAG[key] || roomLink || lagSeen.off || !lagSeen.asked || lagSeen[key] || lagBlocked()) return;
+  if (key === 'hquiz' && !TS.idx) return;   // shown once the history data has arrived (see histEnter)
+  lagRun(key);
+}
+function syncLagMenu() { $('#lag-intros').setAttribute('aria-pressed', String(!lagSeen.off)); }
+syncLagMenu();
+$('#lag-intros').onclick = () => { lagSeen.off = !lagSeen.off; lagSave(); syncLagMenu(); };
+$('[data-lag="replay"]').onclick = () => {
+  openMenu(false);
+  if (lagBlocked()) { toast(B.net ? '対戦が終わってから呼んでくれたまえ' : '回答してから呼んでくれたまえ'); return; }
+  lagRun(world === 'history' ? 'history' : 'base');
+};
+
 /* ---------------- start ---------------- */
 select(placeById.get('JPN'));
 recent.length = 0; recent.push(placeById.get('JPN'));
@@ -2689,5 +3139,14 @@ const hm = location.hash.match(/^#room-([A-Za-z0-9]{4})$/);
 if (hm) { B.joinCode = hm[1].toUpperCase(); setMode('battle'); }
 else if (location.hash === '#timeslip') setWorld('history');
 else if (location.hash === '#food') setWorld('food');
-window.__globe = { B, SQ, QUIZ, TS, HQ, allQs, buildQuestions, findMentions, makeChoices, setWorld, setFlat, setYear, llAt, histAt };
+// first visit: ask whether to hear the guide (not when arriving through a battle invitation);
+// a visitor who first came straight to the time slip gets the basic tour on a later visit.
+// Waits while a spin, a question or a battle is under way.
+function lagStartup() {
+  if (roomLink || (lagSeen.asked && (world !== 'modern' || lagSeen.base || lagSeen.off))) return;
+  if (lagBlocked() || Lag.on) { setTimeout(lagStartup, 1500); return; }
+  if (!lagSeen.asked) lagRun('hello'); else lagAuto('base');
+}
+setTimeout(lagStartup, 900);
+window.__globe = { B, SQ, QUIZ, TS, HQ, allQs, buildQuestions, findMentions, makeChoices, setWorld, setFlat, setYear, llAt, histAt, lag: { run: lagRun, seen: lagSeen, state: Lag }, view: (lon, lat, z) => { autoSpin = false; animateTo(lon, lat, z || zoom, { dur: 1 }); } };
 })();
