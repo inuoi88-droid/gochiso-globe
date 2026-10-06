@@ -51,6 +51,85 @@ const equator = { type: 'LineString', coordinates: d3.range(-180, 181, 3).map(l 
 const tropics = { type: 'MultiLineString', coordinates: [23.44, -23.44].map(la => d3.range(-180, 181, 3).map(l => [l, la])) };
 const fbounds = fc.features.map(f => ({ f, b: d3.geoBounds(f) }));
 const disputed = fc.features.filter(f => placeById.get(f.id) && placeById.get(f.id).disp);
+
+/* ---------------- level of detail ---------------- */
+// While zoomed out one screen pixel spans tens of kilometres, so coastlines and borders are
+// drawn from simplified copies of the map (Douglas-Peucker on each topology arc, so shared
+// borders stay shared and neighbours still meet). Clicks always test the full-detail shapes.
+const LOD_EPS = [0.1, 0.03];   // degrees kept by the two simplified levels
+function dpArc(pts, eps) {
+  const n = pts.length;
+  if (n <= 3) return pts;
+  const keep = new Uint8Array(n); keep[0] = keep[n - 1] = 1;
+  const closed = pts[0][0] === pts[n - 1][0] && pts[0][1] === pts[n - 1][1];
+  const stack = [];
+  if (closed) {   // a ring: anchor it at the point farthest from its start as well
+    let far = 1, fd = -1;
+    for (let i = 1; i < n - 1; i++) { const d = Math.hypot(pts[i][0] - pts[0][0], pts[i][1] - pts[0][1]); if (d > fd) { fd = d; far = i; } }
+    keep[far] = 1; stack.push([0, far], [far, n - 1]);
+  } else stack.push([0, n - 1]);
+  while (stack.length) {
+    const [a, b] = stack.pop();
+    const [x1, y1] = pts[a], [x2, y2] = pts[b];
+    const dx = x2 - x1, dy = y2 - y1, len = Math.hypot(dx, dy) || 1e-12;
+    let idx = -1, md = eps;
+    for (let i = a + 1; i < b; i++) {
+      const d = Math.abs(dy * pts[i][0] - dx * pts[i][1] + x2 * y1 - y2 * x1) / len;
+      if (d > md) { md = d; idx = i; }
+    }
+    if (idx >= 0) { keep[idx] = 1; stack.push([a, idx], [idx, b]); }
+  }
+  const out = [];
+  for (let i = 0; i < n; i++) if (keep[i]) out.push(pts[i]);
+  if (closed && out.length < 4) return pts;   // keep small islands whole rather than collapse them
+  return out;
+}
+function simplifyTopology(t, eps) {
+  const tr = t.transform;
+  const arcs = t.arcs.map(arc => {
+    let x = 0, y = 0;
+    const abs = tr ? arc.map(p => { x += p[0]; y += p[1]; return [x * tr.scale[0] + tr.translate[0], y * tr.scale[1] + tr.translate[1]]; }) : arc;
+    return dpArc(abs, eps);
+  });
+  return { type: 'Topology', objects: t.objects, arcs };
+}
+// a simplified sliver can turn inside out, and d3 would then fill the whole globe with it
+function dropInsideOut(f) {
+  const g = f.geometry;
+  if (!g || g.type !== 'MultiPolygon') { if (g && g.type === 'Polygon' && d3.geoArea(g) > 2 * Math.PI) f.geometry = null; return f; }
+  g.coordinates = g.coordinates.filter(p => d3.geoArea({ type: 'Polygon', coordinates: p }) <= 2 * Math.PI);
+  return f;
+}
+// the land as separate landmasses with no inner borders: filling one huge path with every country
+// in it is slow, and filling countries one by one leaves faint seams between them
+function landPieces(t) {
+  return topojson.merge(t, t.objects.countries.geometries).coordinates
+    .map(c => ({ type: 'Polygon', coordinates: c })).filter(p => d3.geoArea(p) <= 2 * Math.PI);
+}
+const lodLevels = [null, null, { fc, classFC, borders, coast, featById, disputed, land: null }];
+function lodMap(level) {
+  if (lodLevels[level]) return lodLevels[level];
+  const st = simplifyTopology(topo, LOD_EPS[level]);
+  const f2 = topojson.feature(st, st.objects.countries);
+  f2.features.forEach(dropInsideOut);
+  const byId = new Map(f2.features.map(f => [f.id, f]));
+  return (lodLevels[level] = {
+    fc: f2,
+    land: landPieces(st),
+    classFC: [0, 1, 2, 3, 4].map(k => ({ type: 'FeatureCollection', features: f2.features.filter((f, i) => colorOf[i] === k) })),
+    borders: cleanMesh(topojson.mesh(st, st.objects.countries, (a, b) => a !== b)),
+    coast: cleanMesh(topojson.mesh(st, st.objects.countries, (a, b) => a === b)),
+    featById: byId,
+    disputed: disputed.map(f => byId.get(f.id)).filter(Boolean)
+  });
+}
+// which copy to draw at projection scale R (pixels per radian): error stays under ~0.6px
+function lodFor(R) {
+  const degPx = 57.2958 / R;
+  if (fastMotion || degPx > LOD_EPS[0] / 0.6) return 0;
+  if (degPx > LOD_EPS[1] / 0.6) return 1;
+  return 2;
+}
 const labelPlaces = D.places.filter(p => !p.pt).sort((a, b) => b.a - a.a);
 const markerPlaces = D.places.filter(p => p.a < 1.5e-5 && (p.un || (p.d && p.d.length)));
 const shufflePlaces = D.places.filter(p => p.d && p.d.length);
@@ -101,7 +180,9 @@ let rot = [-136, -28], zoom = 1;
 const ZMIN = 0.75, ZMAX = 14;
 // Large, high-density screens are capped to a pixel budget so a frame costs about the
 // same on a PC as on a phone; while the globe spins fast the budget drops further.
-const PX_REST = 2.2e6, PX_SPIN = 0.9e6;
+// While the map moves (drag, fling, zoom, auto-rotation) a slightly lower budget keeps the
+// frame rate up; the full budget comes back as soon as it stops.
+const PX_REST = 2.2e6, PX_MOVE = 1.3e6, PX_SPIN = 0.9e6;
 let pxBudget = PX_REST, RDPR = DPR;
 function applyRes() {
   RDPR = Math.min(DPR, Math.sqrt(pxBudget / (W * H)));
@@ -228,27 +309,26 @@ function draw() {
   ctx.setTransform(RDPR, 0, 0, RDPR, 0, 0);
   ctx.clearRect(0, 0, W, H);
   placed.length = 0;
-  if (!flat && R < Math.hypot(W, H)) {
-    const g = ctx.createRadialGradient(cx, cy, R * 0.96, cx, cy, R * 1.13);
-    g.addColorStop(0, C.glow); g.addColorStop(1, 'rgba(0,0,0,0)');
-    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(cx, cy, R * 1.13, 0, TAU); ctx.fill();
+  // while zooming the size changes every frame, so painting straight onto the canvas is cheaper
+  // than refreshing the cached layers each time
+  layers.direct = Math.abs(R - layers.lastR) > 1e-6; layers.lastR = R;
+  if (!flat) { if (layers.direct) paintBack(ctx, cx, cy, R); else blit(globeLayers(cx, cy, R).back); }
+  else {
+    const og = ctx.createLinearGradient(0, 0, 0, H); og.addColorStop(0, C.sea1); og.addColorStop(1, C.sea2);
+    ctx.beginPath(); path({ type: 'Sphere' }); ctx.fillStyle = og; ctx.fill();
   }
-  let og;
-  if (flat) { og = ctx.createLinearGradient(0, 0, 0, H); og.addColorStop(0, C.sea1); og.addColorStop(1, C.sea2); }
-  else { og = ctx.createRadialGradient(cx - R * 0.35, cy - R * 0.4, R * 0.05, cx, cy, R); og.addColorStop(0, C.sea1); og.addColorStop(1, C.sea2); }
-  ctx.beginPath(); path({ type: 'Sphere' }); ctx.fillStyle = og; ctx.fill();
   ctx.beginPath(); path(graticule); ctx.strokeStyle = C.grat; ctx.lineWidth = 0.6; ctx.stroke();
   if (world === 'history') {
     drawHistory(R, c);
     drawSphereEdge(cx, cy, R);
     if (spinPhase === 'spin') drawNeedle(cx, cy);
     drawHistoryLabels(R, c);
-    if (!flat && R * 1.1 < Math.min(W, H) / 2 + 30) drawBezel(cx, cy, R);
     updateCoords();
     return;
   }
-  for (let k = 0; k < 5; k++) { ctx.beginPath(); path(classFC[k]); ctx.fillStyle = C.land[k]; ctx.fill(); }
-  if (!fastMotion) for (const f of disputed) fillFeature(f, hatch);
+  const L = lodMap(lodFor(R));
+  for (let k = 0; k < 5; k++) { ctx.beginPath(); path(L.classFC[k]); ctx.fillStyle = C.land[k]; ctx.fill(); }
+  if (!fastMotion) for (const f of L.disputed) fillFeature(f, hatch);
 
   const v = curView();
   const asking = viewAsking(v);
@@ -259,12 +339,12 @@ function draw() {
   const hideId = hideName && tPlace ? tPlace.id : null;
   const nameShown = v && showT && (v.state === 'answered' || !v.hideName);
 
-  if (hoverId && !asking) { const f = featById.get(hoverId); if (f) fillFeature(f, C.hover); }
-  if (mode === 'explore' && sel && sel.type === 'place' && featById.get(sel.id)) fillFeature(featById.get(sel.id), C.hilite);
-  if (showT && tPlace && featById.get(tPlace.id)) fillFeature(featById.get(tPlace.id), tCol);
+  if (hoverId && !asking) { const f = L.featById.get(hoverId); if (f) fillFeature(f, C.hover); }
+  if (mode === 'explore' && sel && sel.type === 'place' && L.featById.get(sel.id)) fillFeature(L.featById.get(sel.id), C.hilite);
+  if (showT && tPlace && L.featById.get(tPlace.id)) fillFeature(L.featById.get(tPlace.id), tCol);
 
-  ctx.beginPath(); path(borders); ctx.strokeStyle = C.border; ctx.lineWidth = zoom > 3 ? 0.9 : 0.6; ctx.stroke();
-  ctx.beginPath(); path(coast); ctx.strokeStyle = C.coast; ctx.lineWidth = 0.75; ctx.stroke();
+  ctx.beginPath(); path(L.borders); ctx.strokeStyle = C.border; ctx.lineWidth = zoom > 3 ? 0.9 : 0.6; ctx.stroke();
+  ctx.beginPath(); path(L.coast); ctx.strokeStyle = C.coast; ctx.lineWidth = 0.75; ctx.stroke();
   drawSphereEdge(cx, cy, R);
 
   for (const p of markerPlaces) {
@@ -339,7 +419,6 @@ function draw() {
       label(txt, x, y, s, { family: C.fDisp, weight: 600, color: C.seaInk, halo: false });
     }
   }
-  if (!flat && R * 1.1 < Math.min(W, H) / 2 + 30) drawBezel(cx, cy, R);
   updateCoords();
 }
 // equator and tropics, the shading that makes the globe look round, and its rim
@@ -348,13 +427,45 @@ function drawSphereEdge(cx, cy, R) {
   ctx.setLineDash([6, 4]); ctx.lineWidth = 1; ctx.beginPath(); path(equator); ctx.stroke();
   ctx.setLineDash([1.5, 4]); ctx.lineWidth = 1; ctx.beginPath(); path(tropics); ctx.stroke();
   ctx.restore();
-  if (!flat) {
-    const sg = ctx.createRadialGradient(cx - R * 0.25, cy - R * 0.3, R * 0.35, cx, cy, R);
-    sg.addColorStop(0, 'rgba(255,255,255,0.06)'); sg.addColorStop(0.7, 'rgba(0,0,0,0)'); sg.addColorStop(1, C.shade);
-    ctx.beginPath(); path({ type: 'Sphere' }); ctx.fillStyle = sg; ctx.fill();
-  }
+  if (!flat) { if (layers.direct) paintFront(ctx, cx, cy, R); else blit(globeLayers(cx, cy, R).front); return; }
   ctx.beginPath(); path({ type: 'Sphere' }); ctx.strokeStyle = C.coast; ctx.globalAlpha = 0.35; ctx.lineWidth = 1; ctx.stroke(); ctx.globalAlpha = 1;
 }
+// The globe's glow, sea gradient, shading, rim and brass bezel do not change while it turns,
+// so they are painted once into two offscreen layers (behind and in front of the map) and
+// copied each frame; they are repainted only when the size, zoom or theme changes.
+const layers = { key: '', back: document.createElement('canvas'), front: document.createElement('canvas'), lastR: 0, direct: true };
+function globeLayers(cx, cy, R) {
+  const key = [canvas.width, canvas.height, RDPR, cx, cy, R.toFixed(2), C.sea1, C.sea2, C.glow, C.shade, C.coast, C.brass].join('|');
+  if (layers.key === key) return layers;
+  layers.key = key;
+  const prep = c => {
+    if (c.width !== canvas.width || c.height !== canvas.height) { c.width = canvas.width; c.height = canvas.height; }
+    const g = c.getContext('2d');
+    g.setTransform(1, 0, 0, 1, 0, 0); g.clearRect(0, 0, c.width, c.height); g.setTransform(RDPR, 0, 0, RDPR, 0, 0);
+    return g;
+  };
+  paintBack(prep(layers.back), cx, cy, R);
+  paintFront(prep(layers.front), cx, cy, R);
+  return layers;
+}
+function paintBack(b, cx, cy, R) {
+  if (R < Math.hypot(W, H)) {
+    const g = b.createRadialGradient(cx, cy, R * 0.96, cx, cy, R * 1.13);
+    g.addColorStop(0, C.glow); g.addColorStop(1, 'rgba(0,0,0,0)');
+    b.fillStyle = g; b.beginPath(); b.arc(cx, cy, R * 1.13, 0, TAU); b.fill();
+  }
+  const og = b.createRadialGradient(cx - R * 0.35, cy - R * 0.4, R * 0.05, cx, cy, R);
+  og.addColorStop(0, C.sea1); og.addColorStop(1, C.sea2);
+  b.beginPath(); b.arc(cx, cy, R, 0, TAU); b.fillStyle = og; b.fill();
+}
+function paintFront(f, cx, cy, R) {
+  const sg = f.createRadialGradient(cx - R * 0.25, cy - R * 0.3, R * 0.35, cx, cy, R);
+  sg.addColorStop(0, 'rgba(255,255,255,0.06)'); sg.addColorStop(0.7, 'rgba(0,0,0,0)'); sg.addColorStop(1, C.shade);
+  f.beginPath(); f.arc(cx, cy, R, 0, TAU); f.fillStyle = sg; f.fill();
+  f.beginPath(); f.arc(cx, cy, R, 0, TAU); f.strokeStyle = C.coast; f.globalAlpha = 0.35; f.lineWidth = 1; f.stroke(); f.globalAlpha = 1;
+  if (R * 1.1 < Math.min(W, H) / 2 + 30) drawBezel(cx, cy, R, f);
+}
+function blit(c) { ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.drawImage(c, 0, 0); ctx.restore(); }
 function drawNeedle(cx, cy) {
   ctx.save();
   ctx.strokeStyle = C.ink; ctx.lineWidth = 1.5;
@@ -365,7 +476,7 @@ function drawNeedle(cx, cy) {
   ctx.fillStyle = C.brass; ctx.fill(); ctx.strokeStyle = C.ink; ctx.lineWidth = 1.2; ctx.stroke();
   ctx.restore();
 }
-function drawBezel(cx, cy, R) {
+function drawBezel(cx, cy, R, ctx) {
   const r = R * 1.045 + 6;
   ctx.save();
   ctx.strokeStyle = C.brass; ctx.lineWidth = 3; ctx.globalAlpha = 0.9;
@@ -509,7 +620,7 @@ function endAnim() {
 }
 function flyTo(o, opt = {}) { animateTo(o.lp[0], o.lp[1], opt.zoom || zoomFor(o), opt); }
 
-let frameN = 0, lastT = performance.now(), lastLon = 0, fastMotion = false;
+let frameN = 0, lastT = performance.now(), lastLon = 0, fastMotion = false, turning = false, lastTurn = 0;
 function frame(t) {
   const dt = Math.min(64, t - lastT); lastT = t; frameN++;
   const moved = Math.abs(((rot[0] - lastLon) % 360 + 540) % 360 - 180);
@@ -526,8 +637,12 @@ function frame(t) {
     dirty = true;
   } else if (autoSpin && !flat && !drag && !pinch && !TS.play && t - lastInteract > 6000 && !curView() && !histBusy() && document.visibilityState === 'visible') {
     rot[0] += dt * 0.0045 / Math.max(1, zoom * 0.8);
-    dirty = true;
+    dirty = true; turning = true;
   }
+  if (anim || vel || (drag && drag.moved) || pinch) turning = true;
+  if (turning) lastTurn = t;
+  if (spinPhase !== 'spin') setBudget(turning || t - lastTurn < 160 ? PX_MOVE : PX_REST);
+  turning = false;
   if (spinPhase === 'spin' && !needleMask && frameN % 3 === 0) {
     const n = nameAt(center());
     if (n !== needleName) { needleName = n; $('#readout').textContent = '▼ ' + n; }
@@ -1979,10 +2094,14 @@ function loadChunk(c) {
   ch = { ready: false, rows: null };
   ch.promise = fetch(histUrl(file)).then(r => { if (!r.ok) throw new Error(r.status); return r.json(); }).then(topo => {
     const feats = topojson.feature(topo, topo.objects.p).features;
-    ch.rows = feats.filter(f => f.geometry).map(f => {
+    // simplified copies for drawing while zoomed out (same order as the full features)
+    const lods = LOD_EPS.map(eps => { const st = simplifyTopology(topo, eps); return topojson.feature(st, st.objects.p).features.map(dropInsideOut); });
+    ch.rows = [];
+    feats.forEach((f, k) => {
+      if (!f.geometry) return;
       const q = f.properties;
       // a: area of the shape; o: its area before overlaps were cut out (orders drawing and clicks)
-      return { p: TS.P[q.i], f: q.f, t: q.t, lp: q.l, a: q.a, o: q.o != null ? q.o : q.a, r: q.r, feat: f, b: null };
+      ch.rows.push({ p: TS.P[q.i], f: q.f, t: q.t, lp: q.l, a: q.a, o: q.o != null ? q.o : q.a, r: q.r, feat: f, lod: [lods[0][k], lods[1][k], f], b: null });
     });
     ch.ready = true;
     return ch;
@@ -2062,12 +2181,13 @@ const cmpGrab = x => world === 'history' && TS.cmp && Math.abs(x - W * TS.cmpX) 
 
 /* ---------- drawing ---------- */
 function histView() { return mode === 'hquiz' && HQ.view ? HQ.view : null; }
-function drawLayer(set, isLeft) {
+function drawLayer(set, isLeft, lvl) {
   const v = histView();
   const asking = v && v.state !== 'answered';
   const tCol = v ? (v.state === 'answered' ? (v.ok === true ? C.ok : v.ok === false ? C.ng : C.target) : C.target) : null;
+  const shape = r => (r.lod[lvl] && r.lod[lvl].geometry) ? r.lod[lvl] : r.feat;
   for (const r of set.leaf) {
-    ctx.beginPath(); path(r.feat);
+    ctx.beginPath(); path(shape(r));
     let fill = C.hist[r.p.c] || C.hist[0];
     if (!isLeft && v && v.p === r.p && v.state !== 'spinning') fill = tCol;
     else if (!isLeft && !v && TS.sel === r.p) fill = C.hilite;
@@ -2077,25 +2197,28 @@ function drawLayer(set, isLeft) {
   }
   if (fastMotion) return;
   ctx.save(); ctx.setLineDash([5, 3]); ctx.strokeStyle = C.hGroup; ctx.lineWidth = 1.5;
-  for (const r of set.grp) { ctx.beginPath(); path(r.feat); ctx.stroke(); }
+  for (const r of set.grp) { ctx.beginPath(); path(shape(r)); ctx.stroke(); }
   ctx.restore();
   const sr = !isLeft && !v && TS.sel ? rowOf(TS.sel, set) : null;
-  if (sr) { ctx.beginPath(); path(sr.feat); ctx.strokeStyle = C.ink; ctx.lineWidth = 1.6; ctx.stroke(); }
+  if (sr) { ctx.beginPath(); path(shape(sr)); ctx.strokeStyle = C.ink; ctx.lineWidth = 1.6; ctx.stroke(); }
 }
 function drawHistory(R, c) {
   // land nobody is recorded as ruling stays a pale grey
   // (the shapes were already cut to this coastline when the data was built)
-  ctx.beginPath(); path(fc); ctx.fillStyle = C.hNone; ctx.fill();
+  const lvl = lodFor(R), L = lodMap(lvl);
+  if (!L.land) L.land = landPieces(topo);
+  ctx.fillStyle = C.hNone;
+  for (const p of L.land) { ctx.beginPath(); path(p); ctx.fill(); }
   if (TS.cur) {
     if (TS.cmp && TS.cmpCur) {
       const xd = W * TS.cmpX;
-      ctx.save(); ctx.beginPath(); ctx.rect(0, 0, xd, H); ctx.clip(); drawLayer(TS.cmpCur, true); ctx.restore();
-      ctx.save(); ctx.beginPath(); ctx.rect(xd, 0, W - xd, H); ctx.clip(); drawLayer(TS.cur, false); ctx.restore();
-    } else drawLayer(TS.cur, false);
+      ctx.save(); ctx.beginPath(); ctx.rect(0, 0, xd, H); ctx.clip(); drawLayer(TS.cmpCur, true, lvl); ctx.restore();
+      ctx.save(); ctx.beginPath(); ctx.rect(xd, 0, W - xd, H); ctx.clip(); drawLayer(TS.cur, false, lvl); ctx.restore();
+    } else drawLayer(TS.cur, false, lvl);
   }
-  ctx.beginPath(); path(coast); ctx.strokeStyle = C.coast; ctx.lineWidth = 0.75; ctx.stroke();
+  ctx.beginPath(); path(L.coast); ctx.strokeStyle = C.coast; ctx.lineWidth = 0.75; ctx.stroke();
   if (TS.modern && !fastMotion) {
-    ctx.save(); ctx.setLineDash([4, 3]); ctx.beginPath(); path(borders); ctx.strokeStyle = C.hModern; ctx.lineWidth = zoom > 3 ? 1.1 : 0.85; ctx.stroke(); ctx.restore();
+    ctx.save(); ctx.setLineDash([4, 3]); ctx.beginPath(); path(L.borders); ctx.strokeStyle = C.hModern; ctx.lineWidth = zoom > 3 ? 1.1 : 0.85; ctx.stroke(); ctx.restore();
   }
 }
 function drawHistoryLabels(R, c) {
