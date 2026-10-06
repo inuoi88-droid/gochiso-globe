@@ -1981,7 +1981,8 @@ function loadChunk(c) {
     const feats = topojson.feature(topo, topo.objects.p).features;
     ch.rows = feats.filter(f => f.geometry).map(f => {
       const q = f.properties;
-      return { p: TS.P[q.i], f: q.f, t: q.t, lp: q.l, a: q.a, r: q.r, feat: f, b: null };
+      // a: area of the shape; o: its area before overlaps were cut out (orders drawing and clicks)
+      return { p: TS.P[q.i], f: q.f, t: q.t, lp: q.l, a: q.a, o: q.o != null ? q.o : q.a, r: q.r, feat: f, b: null };
     });
     ch.ready = true;
     return ch;
@@ -1991,12 +1992,13 @@ function loadChunk(c) {
   return ch.promise;
 }
 // rows (polity shapes) that exist in year y, biggest first so small ones are drawn on top
+// (by the area before the build cut overlaps out, so a cut shape keeps its place in the order)
 function rowsAt(y) {
   const ch = TS.chunks.get(chunkOf(y)[2]);
   if (!ch || !ch.ready) return null;
   const leaf = [], grp = [];
   for (const r of ch.rows) if (r.f <= y && y <= r.t) (r.p.g ? grp : leaf).push(r);
-  leaf.sort((a, b) => b.a - a.a);
+  leaf.sort((a, b) => b.o - a.o);
   return { y, leaf, grp };
 }
 function ensureYear(y) {
@@ -2046,7 +2048,7 @@ function rowAt(set, ll) {
   for (const r of set.leaf) {
     if (!r.b) r.b = d3.geoBounds(r.feat);
     if (!inBox(r.b, ll)) continue;
-    if ((!best || r.a < best.a) && d3.geoContains(r.feat, ll)) best = r;
+    if ((!best || r.o < best.o) && d3.geoContains(r.feat, ll)) best = r;
   }
   return best;
 }
@@ -2432,7 +2434,7 @@ function histHomeHTML(Y) {
   const evs = TS.events.filter(e => e.y === Y);
   const prev = [...TS.events].reverse().find(e => e.y < Y), next = TS.events.find(e => e.y > Y);
   const seen = new Set(), big = [];
-  if (TS.cur) for (const r of TS.cur.leaf) { if (!seen.has(r.p)) { seen.add(r.p); big.push(r); } if (big.length >= 18) break; }
+  if (TS.cur) for (const r of TS.cur.leaf.slice().sort((x, y) => y.a - x.a)) { if (!seen.has(r.p)) { seen.add(r.p); big.push(r); } if (big.length >= 18) break; }
   const cards = allCards(), got = cards.filter(c => TS.cards.has(c.key)).length;
   return `<div><p class="eyebrow">タイムスリップ · ${esc(jpEraHTML(Y).replace(/<\/?b>/g, ''))}</p><h2 class="pname">${fmtYear(Y)}の世界</h2></div>
     <p class="lead">下の年表で1年ずつ時代を動かせます。地図の国をクリックすると図鑑が開きます。</p>

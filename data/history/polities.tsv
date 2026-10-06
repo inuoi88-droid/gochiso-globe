@@ -3,6 +3,8 @@
 # 年の範囲を付けると、その年だけその名前にする(例: ~13 は13年まで、14~ は14年から)。
 # 同じ勢力を時代で分けるときは、同じ英語名の行を範囲を変えて並べる。日本語名を - にするとその年は表示しない。
 # (カッコ)付きの英語名は、複数の勢力をまとめたグループ(神聖ローマ帝国など)。
+# 年の範囲から外した年は表示しない。同じ国の二重記録や壊れた記録を除くのに使っている
+# (ブランデンブルク=プロイセン 1702〜1717、マラッカ 1552〜1639、ラシード朝 1842〜1845、青帳ハン国 1385〜1401)。
 Kingdom of Kush	クシュ王国(メロエ王国)
 Hadhramaut	ハドラマウト王国
 Early Cheras	チェーラ朝
@@ -177,7 +179,7 @@ Dál Riata	ダルリアダ王国
 Bavarians	バイエルン人
 Early Lý Dynasty	前李朝(万春)
 Classic Veracruz Culture	ベラクルス文化
-Yenisei Kyrgyz	キルギス
+Yenisei Kyrgyz	キルギス(エニセイ川流域)
 Northern Qi	北斉
 Chalukya Dynasty	チャールキヤ朝
 Chenla	真臘
@@ -732,7 +734,8 @@ House of Valois-Anjou	アンジュー公領(ヴァロワ家)
 Tibet	チベット
 Despotate of Vidin	ヴィディン専制公国
 White Horde	白帳ハン国
-Blue Horde	青帳ハン国
+Blue Horde	青帳ハン国	~1384
+Blue Horde	青帳ハン国	1402~
 Despotate of Dobruja	ドブロジャ専制公国
 Lan Xang	ラーンサーン王国
 Tondo	トンド王国
@@ -790,7 +793,8 @@ Sultanate of Sulu	スールー王国
 Tahirid Sultanate	ターヒル朝
 Sultanate of Palembang	パレンバン王国
 Sultanate of Malacca	マラッカ王国	~1511
-Sultanate of Malacca	マレー半島の諸王国	1512~
+Sultanate of Malacca	マレー半島の諸王国	1512~1551
+Sultanate of Malacca	マレー半島の諸王国	1640~
 Moghulistan	モグーリスタン=ハン国
 Songhai Empire	ソンガイ王国
 Kingdom of Kartli	カルトリ王国
@@ -848,7 +852,8 @@ Duchy of Prussia	プロイセン公国
 Nayaks of Madurai	マドゥライ・ナーヤカ朝
 Sultanate of Banten	バンテン王国
 Mughal Empire	ムガル帝国
-Đại Việt	大越(後黎朝)
+Đại Việt	莫朝	~1682
+Đại Việt	パーンドゥランガ(チャンパーの残存国)	1683~
 Sultanate of Perak	ペラ王国
 Sultanate of Johor	ジョホール王国
 Eastern Hungarian Kingdom	東ハンガリー王国
@@ -889,13 +894,15 @@ Sultanate of Darfur	ダールフール・スルタン国
 English Colonial Empire	イギリスの植民地
 Dzungar Khanate	ジュンガル
 Swedish Empire	スウェーデン(バルト帝国)
-Brandenburg-Prussia	ブランデンブルク=プロイセン
+Brandenburg-Prussia	ブランデンブルク=プロイセン	~1701
+Brandenburg-Prussia	ブランデンブルク=プロイセン	1718~
 Sultanate of Sukadana	スカダナ王国
 Sultanate of Sambas	サンバス王国
 Sultanate of Mempawah	ムンパワ王国
 Later Jin Dynasty	後金
 Oirat Confederation	オイラト
-New Netherland	ニューネーデルラント
+New Netherland	ニューネーデルラント	~1669
+New Netherland	オランダ領ギアナ・カリブ	1670~
 Huguenots	ユグノーの拠点
 Sultanate of Bima	ビマ王国
 Yarubid dynasty	ヤアーリバ朝(オマーン)
@@ -1105,7 +1112,8 @@ United Provinces of Central America	中央アメリカ連邦
 Emirate of Nejd	ネジド首長国(第2次サウード朝)
 Federated Republic of Mexico	メキシコ
 Bolivia	ボリビア
-Emirate of Jabal Shammar	ラシード朝(ジャバル・シャンマル)
+Emirate of Jabal Shammar	ラシード朝(ジャバル・シャンマル)	~1841
+Emirate of Jabal Shammar	ラシード朝(ジャバル・シャンマル)	1846~
 Emirate of Afghanistan	アフガニスタン
 Caucasian Imamate	カフカス・イマーム国
 Oriental Republic of Uruguay	ウルグアイ
@@ -1179,7 +1187,9 @@ French Third Republic	フランス(第三共和政)
 (French Third Republic)	フランス(第三共和政)
 German Empire	ドイツ帝国
 Kingdom of Fiji	フィジー王国
-British Gold Coast	イギリス領黄金海岸
+British Gold Coast	イギリス領黄金海岸	~1904
+British Gold Coast	イギリス領西アフリカ(黄金海岸・ナイジェリア)	1905~1957
+British Gold Coast	イギリス領ナイジェリア	1958~
 First Spanish Republic	スペイン(第一共和政)
 Sultanate of Hobyo	ホビョ・スルタン国
 Principality of Bulgaria	ブルガリア
@@ -1334,7 +1344,7 @@ Republic of Syria	シリア
 Tanzania	タンザニア
 State of Kuwait	クウェート
 Sierra Leone	シエラレオネ
-British East Africa	イギリス領東アフリカ
+British East Africa	イギリス領アフリカ(独立前の植民地)
 Central African Republic	中央アフリカ
 Republic of Côte d'Ivoire	コートジボワール
 Republic of Senegal	セネガル

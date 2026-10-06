@@ -99,19 +99,77 @@ for (const r of rows) {
 }
 console.log('rows', rows.length, '-> merged', merged.length, 'rewound polygons', rewound);
 
+/* ---------- helpers for planar polygon operations ---------- */
+const boxOf = rings => { const a = [180, 90, -180, -90]; for (const rg of rings) for (const [x, y] of rg) { if (x < a[0]) a[0] = x; if (y < a[1]) a[1] = y; if (x > a[2]) a[2] = x; if (y > a[3]) a[3] = y; } return a; };
+const sphArea = g => polysOf(g).reduce((s, poly) => s + d3.geoArea({ type: 'Polygon', coordinates: poly }), 0);
+const KM2 = 6371.0088 * 6371.0088;
+const rewind = polys => { for (const poly of polys) if (d3.geoArea({ type: 'Polygon', coordinates: poly }) > 2 * Math.PI) poly.forEach(ring => ring.reverse()); return polys; };
+// a point well inside a polygon (polylabel, with longitudes unwrapped around the first vertex)
+function innerOf(poly) {
+  const ref = poly[0][0][0];
+  const p = polylabel(poly.map(rg => rg.map(([x, y]) => { const dx = x - ref; return [dx > 180 ? x - 360 : dx < -180 ? x + 360 : x, y]; })), 0.05);
+  return [p[0] > 180 ? p[0] - 360 : p[0] < -180 ? p[0] + 360 : p[0], p[1]];
+}
+function biggestPoly(g) {
+  let big = null, bigA = -1;
+  for (const poly of polysOf(g)) { const a = d3.geoArea({ type: 'Polygon', coordinates: poly }); if (a > bigA) { bigA = a; big = poly; } }
+  return big;
+}
+// polygon-clipping works on a flat map, so a ring that jumps across the 180° meridian (Natural
+// Earth's Chukotka, Fiji and Antarctica) must be cut there first: make its longitudes
+// continuous, then intersect copies shifted by -360/0/+360 with the [-180,180] box.
+function splitAtAntimeridian(poly) {
+  const outer = poly[0];
+  let jump = false;
+  for (let i = 1; i < outer.length; i++) if (Math.abs(outer[i][0] - outer[i - 1][0]) > 180) { jump = true; break; }
+  if (!jump) return [poly];
+  const un = [outer[0].slice()];
+  for (let i = 1; i < outer.length; i++) {
+    let x = outer[i][0];
+    const prev = un[i - 1][0];
+    while (x - prev > 180) x -= 360;
+    while (x - prev < -180) x += 360;
+    un.push([x, outer[i][1]]);
+  }
+  const drift = un[un.length - 1][0] - un[0][0];
+  if (Math.abs(drift) > 180) {   // a ring around a pole: close it along the pole
+    const py = un.reduce((s, q) => s + q[1], 0) < 0 ? -90 : 90;
+    const last = un[un.length - 1];
+    un.push([last[0], py], [un[0][0], py], un[0].slice());
+  }
+  const box = [[[-180, -90], [180, -90], [180, 90], [-180, 90], [-180, -90]]];
+  const out = [];
+  for (const k of [-360, 0, 360]) {
+    const shifted = [un.map(([x, y]) => [x + k, y])];
+    try { out.push(...pc.intersection([shifted], [box])); } catch (e) { /* skip this copy */ }
+  }
+  return out;
+}
+// polygon-clipping occasionally fails on nearly coincident edges: then cut one shape at a
+// time, rounding the coordinates on a second try, and skip only a shape that still fails
+const round = polys => polys.map(p => p.map(rg => rg.map(([x, y]) => [Math.round(x * 1e5) / 1e5, Math.round(y * 1e5) / 1e5])));
+function subtract(base, subs) {
+  try { return { polys: pc.difference(base, ...subs), skipped: [] }; } catch (e) { /* try one by one */ }
+  let cur = base; const skipped = [];
+  subs.forEach((sub, i) => {
+    try { cur = pc.difference(cur, sub); return; } catch (e) { /* retry rounded */ }
+    try { cur = pc.difference(round(cur), round(sub)); return; } catch (e) { skipped.push(i); }
+  });
+  return { polys: cur, skipped };
+}
+
 /* ---------- cut the shapes to the land ---------- */
 // Cliopatria shapes reach a little into the sea. Cutting them to the same coastline the app
 // draws (data/world.json) here means the browser does not have to clip every frame.
 // Results are cached in build/cache (not committed) because this step takes a few minutes.
 {
   const world = JSON.parse(fs.readFileSync(path.join(ROOT, 'data', 'world.json'), 'utf8'));
-  const land = tj.merge(world, world.objects.countries.geometries);
-  const boxOf = rings => { const a = [180, 90, -180, -90]; for (const rg of rings) for (const [x, y] of rg) { if (x < a[0]) a[0] = x; if (y < a[1]) a[1] = y; if (x > a[2]) a[2] = x; if (y > a[3]) a[3] = y; } return a; };
-  const landPolys = land.coordinates.map(p => ({ p, b: boxOf(p) }));
+  const countries = tj.feature(world, world.objects.countries).features;
+  const landPolys = countries.flatMap(f => polysOf(f.geometry)).flatMap(splitAtAntimeridian).map(p => ({ p, b: boxOf(p) }));
   const cacheDir = path.join(ROOT, 'build', 'cache');
   fs.mkdirSync(cacheDir, { recursive: true });
   const cacheFile = path.join(cacheDir, 'landclip.json');
-  const landHash = crypto.createHash('sha1').update(JSON.stringify(land.coordinates)).digest('hex').slice(0, 12);
+  const landHash = crypto.createHash('sha1').update('v2|' + JSON.stringify(landPolys.map(q => q.p))).digest('hex').slice(0, 12);
   let cache = {};
   try { const c = JSON.parse(fs.readFileSync(cacheFile, 'utf8')); if (c.land === landHash) cache = c.geoms; } catch (e) { /* no cache yet */ }
   const fresh = {};
@@ -129,10 +187,7 @@ console.log('rows', rows.length, '-> merged', merged.length, 'rewound polygons',
       catch (e) { out = null; failed++; }
     }
     fresh[h] = out;
-    if (out && out.length) {
-      r.geom = { type: 'MultiPolygon', coordinates: out };
-      for (const poly of out) if (d3.geoArea({ type: 'Polygon', coordinates: poly }) > 2 * Math.PI) poly.forEach(ring => ring.reverse());
-    }
+    if (out && out.length) r.geom = { type: 'MultiPolygon', coordinates: rewind(JSON.parse(JSON.stringify(out))) };
     if (++done % 1000 === 0) console.log(`  land clip ${done}/${merged.length} (${Math.round((Date.now() - t0) / 1000)}s)`);
   }
   fs.writeFileSync(cacheFile, JSON.stringify({ land: landHash, geoms: fresh }));
@@ -142,98 +197,125 @@ console.log('rows', rows.length, '-> merged', merged.length, 'rewound polygons',
 /* ---------- overlaps: in any year, land claimed by two polities belongs to the smaller one ---------- */
 // Cliopatria sometimes keeps a former colony inside the old power for decades (the French
 // Fifth Republic row of 1961-2023 still holds Algeria after it became independent in 1963).
-// The app already draws smaller shapes on top, so here the larger shape loses that land too,
-// year by year; otherwise its name, area and quiz pin would sit on the other country.
+// The app draws smaller shapes on top (by the area before this step), so here the larger
+// shape loses that land too, year by year; otherwise its name, area and quiz pin would sit
+// on the other country. data/history/overrides.txt names pairs where the size rule is wrong.
 {
-  const boxOf = rings => { const a = [180, 90, -180, -90]; for (const rg of rings) for (const [x, y] of rg) { if (x < a[0]) a[0] = x; if (y < a[1]) a[1] = y; if (x > a[2]) a[2] = x; if (y > a[3]) a[3] = y; } return a; };
-  const KM2_ = 6371.0088 * 6371.0088;
-  const geoArea = g => polysOf(g).reduce((s, poly) => s + d3.geoArea({ type: 'Polygon', coordinates: poly }), 0);
-  const inner = g => {   // a point well inside the biggest polygon
-    let big = null, bigA = -1;
-    for (const poly of polysOf(g)) { const a = d3.geoArea({ type: 'Polygon', coordinates: poly }); if (a > bigA) { bigA = a; big = poly; } }
-    if (!big) return null;
-    const ref = big[0][0][0];
-    const p = polylabel(big.map(rg => rg.map(([x, y]) => { const dx = x - ref; return [dx > 180 ? x - 360 : dx < -180 ? x + 360 : x, y]; })), 0.05);
-    return [p[0] > 180 ? p[0] - 360 : p[0] < -180 ? p[0] + 360 : p[0], p[1]];
-  };
-  // polygon-clipping occasionally fails on nearly coincident edges: then cut one shape at a
-  // time, rounding the coordinates on a second try, and skip only a shape that still fails
-  const round = polys => polys.map(p => p.map(rg => rg.map(([x, y]) => [Math.round(x * 1e5) / 1e5, Math.round(y * 1e5) / 1e5])));
-  function subtract(base, subs) {
-    try { return { polys: pc.difference(base, ...subs), skipped: [] }; } catch (e) { /* try one by one */ }
-    let cur = base; const skipped = [];
-    subs.forEach((sub, i) => {
-      try { cur = pc.difference(cur, sub); return; } catch (e) { /* retry rounded */ }
-      try { cur = pc.difference(round(cur), round(sub)); return; } catch (e) { skipped.push(i); }
-    });
-    return { polys: cur, skipped };
+  // overrides: "winner|loser|from~to" gives the shared land to the winner whatever the sizes;
+  // "a=b|from~to" leaves the overlap as it is (b is a part of a in those years)
+  const rules = [];
+  for (const raw of rd('overrides.txt').split('\n')) {
+    const line = raw.trim();
+    if (!line || line.startsWith('#')) continue;
+    const parts = line.split('|').map(x => x.trim());
+    const keep = parts[0].includes('=');
+    const m = (parts[keep ? 1 : 2] || '~').match(/^(-?\d*)~(-?\d*)$/);
+    if (!m || (!keep && parts.length < 2)) throw new Error('bad overrides line ' + line);
+    const from = m[1] ? +m[1] : -Infinity, to = m[2] ? +m[2] : Infinity;
+    if (keep) { const [a, b] = parts[0].split('='); rules.push({ keep: true, a, b, from, to }); }
+    else rules.push({ keep: false, win: parts[0], lose: parts[1], from, to });
   }
+  const named = new Set(merged.map(r => r.ja));
+  for (const q of rules) for (const n of q.keep ? [q.a, q.b] : [q.win, q.lose]) if (!named.has(n)) throw new Error('overrides: unknown polity ' + n);
+  // years [f,t] minus a list of [from,to] ranges
+  const minus = (f, t, cut) => { let parts = [[f, t]]; for (const [a, b] of cut) parts = parts.flatMap(([x, y]) => b < x || a > y ? [[x, y]] : [...(a > x ? [[x, a - 1]] : []), ...(b < y ? [[b + 1, y]] : [])]); return parts; };
+  const KEEP_KM2 = 300;   // ignore cuts smaller than this (and than 0.3% of the shape): border slivers
   const leafRows = merged.filter(r => !r.group);
-  for (const r of leafRows) { r.sa = geoArea(r.geom); r.box = boxOf(polysOf(r.geom).flat()); r.ip = inner(r.geom); }
-  // rows active in each 25-year window, to find candidates quickly
+  for (const r of leafRows) {
+    r.sa = sphArea(r.geom);
+    r.box = boxOf(polysOf(r.geom).flat());
+    const polys = polysOf(r.geom);
+    // where to look for overlaps: an inner point of every sizeable part, plus a grid of points
+    r.probes = polys.filter(p => d3.geoArea({ type: 'Polygon', coordinates: p }) >= r.sa * 0.02 || polys.length === 1).map(innerOf);
+    const [x0, y0, x1, y1] = r.box, n = 9, grid = [];
+    if (x1 - x0 < 300) for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) {
+      const q = [x0 + (x1 - x0) * (i + 0.5) / n, y0 + (y1 - y0) * (j + 0.5) / n];
+      if (d3.geoContains(r.geom, q)) grid.push(q);
+    }
+    r.grid = grid;
+  }
+  // cut results are cached by the (already land-clipped) shapes involved, so a change to the
+  // coastline, the names or this code's version gives new keys
+  const OV = 'ov2';
+  for (const r of leafRows) r.ckey = crypto.createHash('sha1').update(JSON.stringify(r.geom.coordinates)).digest('hex');
+  const ovFile = path.join(ROOT, 'build', 'cache', 'overlap.json');
+  let ovCache = {};
+  try { const c = JSON.parse(fs.readFileSync(ovFile, 'utf8')); if (c.v === OV) ovCache = c.geoms; } catch (e) { /* no cache yet */ }
+  const ovFresh = {};
   const W = 25, buckets = new Map();
   for (const r of leafRows) for (let b = Math.floor(r.from / W); b <= Math.floor(r.to / W); b++) { if (!buckets.has(b)) buckets.set(b, []); buckets.get(b).push(r); }
-  const wins = (s, r) => s.sa < r.sa || (s.sa === r.sa && (s.from > r.from || (s.from === r.from && s.ja > r.ja)));
-  const cacheFile = path.join(ROOT, 'build', 'cache', 'overlap.json');
-  let cache = {};
-  try { cache = JSON.parse(fs.readFileSync(cacheFile, 'utf8')); } catch (e) { /* no cache yet */ }
-  const fresh = {};
+  const smaller = (s, r) => s.sa < r.sa || (s.sa === r.sa && (s.from > r.from || (s.from === r.from && s.ja > r.ja)));
+  const inBox = (q, b) => q[0] >= b[0] && q[0] <= b[2] && q[1] >= b[1] && q[1] <= b[3];
   const out = [];
   let pairs = 0, split = 0, failed = 0;
   const report = ['larger\tyears\tsmaller (kept)\tyears\tlarger km2\tsmaller km2'];
   const t0 = Date.now();
   for (const r of merged) {
-    if (r.group || !r.ip) { out.push(r); continue; }
+    if (r.group) { out.push(r); continue; }
     const seen = new Set(), over = [];
     for (let b = Math.floor(r.from / W); b <= Math.floor(r.to / W); b++) {
       for (const s of buckets.get(b) || []) {
         if (s === r || seen.has(s)) continue;
         seen.add(s);
-        if (s.ja === r.ja || !s.ip || s.to < r.from || s.from > r.to || !wins(s, r)) continue;
+        if (s.ja === r.ja || s.to < r.from || s.from > r.to) continue;
         if (s.box[0] > r.box[2] || s.box[2] < r.box[0] || s.box[1] > r.box[3] || s.box[3] < r.box[1]) continue;
-        // only shapes that really sit inside this one, not neighbours touching along a border
-        if (!d3.geoContains(r.geom, s.ip)) continue;
-        over.push(s);
+        // years in which s takes land from r: by size, unless an override says otherwise
+        let win = smaller(s, r) ? [[Math.max(s.from, r.from), Math.min(s.to, r.to)]] : [];
+        const forced = [];
+        for (const q of rules) {
+          if (q.keep && ((q.a === r.ja && q.b === s.ja) || (q.a === s.ja && q.b === r.ja))) win = win.flatMap(([f, t]) => minus(f, t, [[q.from, q.to]]));
+          if (!q.keep && q.lose === s.ja && q.win === r.ja) win = win.flatMap(([f, t]) => minus(f, t, [[q.from, q.to]]));
+          if (!q.keep && q.win === s.ja && q.lose === r.ja) forced.push([Math.max(s.from, r.from, q.from), Math.min(s.to, r.to, q.to)]);
+        }
+        const all = [...win, ...forced.filter(([f, t]) => f <= t)];
+        if (!all.length) continue;
+        // only shapes that really overlap this one, not neighbours touching along a border
+        if (!forced.length) {
+          const hitProbe = s.probes.some(q => inBox(q, r.box) && d3.geoContains(r.geom, q));
+          const hitGrid = !hitProbe && s.grid.filter(q => inBox(q, r.box) && d3.geoContains(r.geom, q)).length >= 2;
+          if (!hitProbe && !hitGrid) continue;
+        }
+        for (const [f, t] of all) over.push({ s, f, t });
       }
     }
     if (!over.length) { out.push(r); continue; }
-    pairs += over.length;
-    for (const s of over) report.push([r.ja, `${r.from}-${r.to}`, s.ja, `${s.from}-${s.to}`, Math.round(r.sa * KM2_), Math.round(s.sa * KM2_)].join('\t'));
+    pairs += new Set(over.map(o => o.s)).size;
+    for (const s of new Set(over.map(o => o.s))) report.push([r.ja, `${r.from}-${r.to}`, s.ja, `${s.from}-${s.to}`, Math.round(r.sa * KM2), Math.round(s.sa * KM2)].join('\t'));
     // split the years wherever the set of overlapping shapes changes
     const cuts = new Set([r.from, r.to + 1]);
-    for (const s of over) { if (s.from > r.from) cuts.add(s.from); if (s.to < r.to) cuts.add(s.to + 1); }
+    for (const o of over) { if (o.f > r.from) cuts.add(o.f); if (o.t < r.to) cuts.add(o.t + 1); }
     const ys = [...cuts].sort((a, b) => a - b);
-    let last = null;
+    let last = null, changed = false;
     for (let i = 0; i < ys.length - 1; i++) {
       const a = ys[i], b = ys[i + 1] - 1;
-      const act = over.filter(s => s.from <= a && s.to >= b);
+      const act = [...new Set(over.filter(o => o.f <= a && o.t >= b).map(o => o.s))];
       let geom = r.geom;
       if (act.length) {
-        const h = crypto.createHash('sha1').update(r.key + '|' + act.map(s => s.key).sort().join('|')).digest('hex');
-        let res = cache[h];
-        if (res === undefined) {
+        const ck = crypto.createHash('sha1').update(OV + '|' + r.ckey + '|' + act.map(s => s.ckey).sort().join('|')).digest('hex');
+        let polys = ovCache[ck];
+        if (!polys) {
           const left = subtract(polysOf(r.geom), act.map(s => polysOf(s.geom)));
-          res = left.polys;
-          if (left.skipped.length) { failed++; report.push(`FAILED\t${r.ja}\t${r.from}-${r.to}\t${left.skipped.map(i => act[i].ja).join(',')}`); }
+          if (left.skipped.length) { failed++; report.push(`FAILED\t${r.ja}\t${r.from}-${r.to}\t${left.skipped.map(k => act[k].ja).join(',')}`); }
+          polys = rewind(left.polys);
         }
-        fresh[h] = res;
-        if (res) {
-          for (const poly of res) if (d3.geoArea({ type: 'Polygon', coordinates: poly }) > 2 * Math.PI) poly.forEach(ring => ring.reverse());
-          geom = { type: 'MultiPolygon', coordinates: res };
-        }
+        ovFresh[ck] = polys;
+        const g2 = { type: 'MultiPolygon', coordinates: JSON.parse(JSON.stringify(polys)) };
+        const lost = (r.sa - sphArea(g2)) * KM2;
+        if (lost > KEEP_KM2 && lost > r.sa * KM2 * 0.003) { geom = g2; changed = true; }
       }
       const key = geom === r.geom ? r.key : JSON.stringify(geom.coordinates);
       // nothing left (the whole shape was another polity's that year): drop those years
       if (!polysOf(geom).length) { last = null; continue; }
       if (last && last.key === key && last.to === a - 1) { last.to = b; continue; }
-      last = Object.assign({}, r, { from: a, to: b, geom, key });
+      last = Object.assign({}, r, { from: a, to: b, geom, key, cut: geom !== r.geom });
       out.push(last);
     }
-    split++;
+    if (changed) split++;
   }
   merged.length = 0; merged.push(...out);
-  fs.writeFileSync(cacheFile, JSON.stringify(fresh));
+  fs.mkdirSync(path.join(ROOT, 'build', 'cache'), { recursive: true });
   fs.writeFileSync(path.join(ROOT, 'build', 'cache', 'overlap-report.tsv'), report.join('\n') + '\n');
+  fs.writeFileSync(ovFile, JSON.stringify({ v: OV, geoms: ovFresh }));
   console.log('overlaps: rows cut', split, 'overlapping pairs', pairs, 'failed (kept as is)', failed, 'rows now', merged.length, `(${Math.round((Date.now() - t0) / 1000)}s)`);
 }
 
@@ -254,23 +336,32 @@ for (const r of merged) {
 }
 
 /* ---------- per-row geometry stats: label point, area, extent ---------- */
-const area = g => polysOf(g).reduce((s, poly) => s + d3.geoArea({ type: 'Polygon', coordinates: poly }), 0);
-const KM2 = 6371.0088 * 6371.0088;
+// The label (also the quiz pin and where the map flies to) goes on the polity's home polygon when
+// data/history/labels.tsv names a home point for it (so the name of a colonial power sits on its
+// own country, not on its largest colony); otherwise on the largest polygon.
+const homes = new Map();
+for (const raw of rd('labels.tsv').split('\n')) {
+  if (!raw.trim() || raw.startsWith('#')) continue;
+  const [ja, ll] = raw.split('\t');
+  const [lon, lat] = ll.split(',').map(Number);
+  if (!pIndex.has(ja)) throw new Error('labels.tsv: unknown polity ' + ja);
+  homes.set(ja, [lon, lat]);
+}
+const area = sphArea;
 for (const r of merged) {
   const polys = polysOf(r.geom);
-  let big = null, bigA = -1;
-  for (const poly of polys) { const a = d3.geoArea({ type: 'Polygon', coordinates: poly }); if (a > bigA) { bigA = a; big = poly; } }
   r.area = area(r.geom) * KM2;
+  const big = biggestPoly(r.geom);
   if (!big) { r.lp = [0, 0]; r.rad = 0; continue; }
-  const ref = big[0][0][0];
-  const ring = big.map(rg => rg.map(([x, y]) => { const dx = x - ref; if (dx > 180) x -= 360; if (dx < -180) x += 360; return [x, y]; }));
-  const lp = polylabel(ring, 0.05);
-  let x = lp[0]; if (x > 180) x -= 360; if (x < -180) x += 360;
-  r.lp = [+x.toFixed(2), +lp[1].toFixed(2)];
+  const home = !r.group && homes.get(r.ja);
+  const homePoly = home ? polys.find(p => d3.geoContains({ type: 'Polygon', coordinates: p }, home)) : null;
+  const lp = innerOf(homePoly || big);
+  r.lp = [+lp[0].toFixed(2), +lp[1].toFixed(2)];
+  const bigA = d3.geoArea({ type: 'Polygon', coordinates: big });
   let rad = 0.002;
   for (const poly of polys) {
     const a = d3.geoArea({ type: 'Polygon', coordinates: poly });
-    if (a < bigA * 0.05) continue;
+    if (a < bigA * 0.05 && poly !== homePoly) continue;
     for (const v of poly[0]) rad = Math.max(rad, d3.geoDistance(r.lp, v));
   }
   r.rad = +Math.min(rad, 1.4).toFixed(3);
@@ -352,7 +443,9 @@ for (let c = 0, y0 = Y0; y0 <= Y1; c++, y0 += CHUNK) {
   const y1 = Math.min(Y1, y0 + CHUNK - 1);
   const feats = merged.filter(r => r.from <= y1 && r.to >= y0).map(r => ({
     type: 'Feature',
-    properties: { i: pid.get(r.p), f: r.from, t: r.to, l: r.lp, a: Math.round(r.area), r: r.rad },
+    // o: the area before overlaps were cut, which the app uses to order drawing and clicks, so a
+    // cut shape never jumps above a neighbour it was not cut against
+    properties: { i: pid.get(r.p), f: r.from, t: r.to, l: r.lp, a: Math.round(r.area), o: Math.round((r.sa != null ? r.sa * KM2 : r.area)), r: r.rad },
     geometry: r.geom
   }));
   let topo = tsv.topology({ p: { type: 'FeatureCollection', features: feats } });
@@ -361,6 +454,24 @@ for (let c = 0, y0 = Y0; y0 <= Y1; c++, y0 += CHUNK) {
   topo = ts.filter(topo, ts.filterWeight(topo, THRESH * 4, ts.sphericalRingArea));
   topo = tj.quantize(topo, QUANT);
   for (const arc of topo.arcs) for (const pt of arc) pt.length = 2;
+  // simplification can flip a tiny sliver inside out, and d3 then fills the whole globe with it:
+  // drop any polygon that now covers more than half the sphere
+  let flipped = 0;
+  for (const g of topo.objects.p.geometries) {
+    if (g.type !== 'Polygon' && g.type !== 'MultiPolygon') continue;
+    const polys = g.type === 'Polygon' ? [g.arcs] : g.arcs;
+    const keep = polys.filter(poly => {
+      const f = tj.feature(topo, { type: 'Polygon', arcs: poly });
+      const ok = f.geometry && d3.geoArea(f) <= 2 * Math.PI;
+      if (!ok) flipped++;
+      return ok;
+    });
+    if (keep.length === polys.length) continue;
+    if (!keep.length) { g.type = null; delete g.arcs; }
+    else if (g.type === 'Polygon') g.arcs = keep[0];
+    else g.arcs = keep;
+  }
+  if (flipped) console.log(`  ${y0}-${y1}: dropped ${flipped} inside-out sliver polygon(s)`);
   // geometries emptied by the filter are kept as nulls so every row still exists
   const file = `c${String(c).padStart(2, '0')}.json`;
   const s = JSON.stringify(topo);
