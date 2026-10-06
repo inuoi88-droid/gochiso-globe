@@ -1,0 +1,1459 @@
+# Cliopatria の勢力名 → 日本語名
+# 列: 英語名(Cliopatria の Name)<TAB>日本語名<TAB>年の範囲(省略可)
+# 年の範囲を付けると、その年だけその名前にする(例: ~13 は13年まで、14~ は14年から)。
+# 同じ勢力を時代で分けるときは、同じ英語名の行を範囲を変えて並べる。日本語名を - にするとその年は表示しない。
+# (カッコ)付きの英語名は、複数の勢力をまとめたグループ(神聖ローマ帝国など)。
+Kingdom of Kush	クシュ王国(メロエ王国)
+Hadhramaut	ハドラマウト王国
+Early Cheras	チェーラ朝
+Early Pandyas	パーンディヤ朝
+Anurādhapura	アヌラーダプラ王国
+Early Cholas	チョーラ朝
+Mayan City-States	マヤの都市国家
+Byeonhan	弁韓	~299
+Byeonhan	加耶(加羅)	300~
+Jinhan	辰韓
+Mahan	馬韓
+Zapotec Civilization	サポテカ文明
+Caucasian Iberia	イベリア王国(カフカス)
+Kingdom of Armenia	アルメニア王国
+Caucasian Albania	アルバニア王国(カフカス)
+Kingdom of Gordyene	ゴルデュエネ王国
+Kingdom of Commagene	コンマゲネ王国
+Kingdom of Sophene	ソフェネ王国
+Lazica	ラジカ王国
+Cimmerian Bosporus	ボスポロス王国
+Kingdom of Adiabene	アディアベネ王国
+Teotihuacan	テオティワカン
+Kingdom of Axum	アクスム王国
+Great Yuan	大宛
+Wusun	烏孫
+Greek City-States	ギリシアの都市国家
+Xiongnu	匈奴
+Kingdom of Osroene	オスロエネ王国
+Han Dynasty	前漢	~13
+Han Dynasty	後漢	14~
+Goguryeo	高句麗
+Dongye	濊(東濊)
+Dong-okjeo	沃沮
+Mauretania	マウレタニア王国
+Thracian Kingdom	トラキア王国
+Satavahana Dynasty	サータヴァーハナ朝
+Kingdom of Pontus	ポントス王国
+Kingdom of Cappadocia	カッパドキア王国
+Nabataeans	ナバテア王国
+Himyarite Kingdom	ヒムヤル王国
+Yuezhi	月氏
+Indo-Scythians	インド・スキタイ(サカ)
+Parthian Empire	パルティア
+Judea	ユダヤ(ヘロデ朝)
+Indo-Parthians	インド・パルティア王国
+Roman Empire	ローマ帝国
+Indo-Greeks	インド・ギリシア人の王国
+Xin Dynasty	新
+Goths	ゴート人
+Kushan Empire	クシャーナ朝
+Western Satraps	西クシャトラパ
+Trưng sisters	徴姉妹の反乱
+Funan	扶南
+Southern Xiongnu	南匈奴
+Xianbei	鮮卑
+Pyu City-States	ピュー(驃)の都市国家
+Huns	フン人
+Protectorate of the Western Regions	西域都護府
+Burgundians	ブルグンド人
+Qataban	カタバーン王国
+Sabaeans	サバ王国
+Norse	ノルマン人(北ゲルマン)
+Cao Cao	曹操の勢力
+Chámpa	チャンパー(林邑)
+Gothia	ゴート人の領域
+Eastern Wu	呉
+Sasanian Empire	ササン朝
+Shu Han	蜀
+Cao Wei	魏
+Eastern Kushans	クシャーナ朝(東)
+Ripuarian Franks	リブアリア・フランク人
+Western Kushans	クシャーナ朝(西)
+Vakataka Kingdom	ヴァーカータカ朝
+Indo-Sasanian Empire	クシャーノ・ササン朝
+Gallic Empire	ガリア帝国
+Palmyrene Empire	パルミラ王国
+Tamna	耽羅
+Western Jin	西晋	~316
+Western Jin	東晋	317~
+Lakhmid Kingdom	ラフム朝
+Saxons	サクソン人
+Late Pallava Empire	パッラヴァ朝
+Tuyuhun	吐谷渾
+Yaudheya Republic	ヤウデーヤ共和国
+Cheng Han	成漢
+Former Zhao	前趙
+Former Liang	前涼
+Gupta Empire	グプタ朝
+Vandals	ヴァンダル人
+Former Yan	前燕
+Later Zhao	後趙
+Alodia	アルワ王国
+Makuria	マクリア王国
+Nobatia	ノバティア王国
+Baekje	百済
+Kadamba Empire	カダンバ朝
+Kalabhra Dynasty	カラブラ朝
+Former Qin	前秦
+Kamarupa Kingdom	カーマルーパ王国
+Kidarites	キダーラ朝
+Salian Franks	サリ・フランク人
+Tarumanagara	タルマヌガラ王国
+Silla	新羅
+Western Qin	西秦
+Northern Wei	北魏
+Western Yan	西燕
+Angles	アングル人
+Later Liang	後涼
+Later Yan	後燕
+Later Qin	後秦
+Xionites	キオン
+Eastern Roman Empire	東ローマ帝国
+Western Roman Empire	西ローマ帝国
+Visigoths	西ゴート人
+Northern Liang	北涼
+Southern Liang	南涼
+Southern Yan	南燕
+Rouran Khaganate	柔然
+Western Liang	西涼
+Northern Yan	北燕
+Xia	夏(大夏)
+White Huns	エフタル
+Burgundian Kingdom	ブルグンド王国
+Kingdom of the Suebi	スエヴィ王国
+Alans	アラン人
+Hunnic Empire	フン帝国
+Liu Song Dynasty	宋(南朝)
+Visigothic Kingdom	西ゴート王国
+(Brythonic Kingdoms)	ブリトン人の諸王国
+Brythons	ブリトン人
+Vandal Kingdom	ヴァンダル王国
+Anglo-Saxon England	アングロ・サクソン七王国
+(Anglo-Saxon England)	アングロ・サクソン七王国
+Rugiland	ルギ人の王国
+Ostrogoths	東ゴート人
+(Kingdom of the Franks)	フランク王国(メロヴィング朝)	~750
+(Kingdom of the Franks)	フランク王国(カロリング朝)	751~
+Kingdom of Alamannia	アラマンニ王国
+(Merovingian Empire)	フランク王国(メロヴィング朝)
+Kingdom of the Franks	フランク王国(メロヴィング朝)	~750
+Kingdom of the Franks	フランク王国(カロリング朝)	751~
+Thuringian states	テューリンゲン人の国々
+Maitraka Dynasty	マイトラカ朝
+Kingdom of Thuringia	テューリンゲン王国
+Kingdom of Soissons	ソワソン管区
+Lombards	ランゴバルド人
+Southern Qi	斉(南朝)
+Kingdom of Kent	ケント王国
+Kingdom of Sussex	サセックス王国
+Ostrogothic Kingdom	東ゴート王国
+Scandinavian minor kingdoms	スカンディナヴィアの小王国
+Liang Dynasty	梁(南朝)
+Ghassanids	ガッサーン朝
+Kingdom of the Gepids	ゲピド王国
+Wihtgar	ワイト島の王国
+Eastern Wei	東魏
+Western Wei	西魏
+Kingdom of East Anglia	イースト・アングリア王国
+Kingdom of Deira	デイラ王国
+Kingdom of Wessex	ウェセックス王国
+Kingdom of Mercia	マーシア王国
+Kingdom of Essex	エセックス王国
+Kingdom of Lindsey	リンジー王国
+Kingdom of Gwent	グウェント王国
+Asuka Japan	倭(飛鳥時代)	~700
+Asuka Japan	日本(飛鳥時代)	701~
+Kingdom of Brycheiniog	ブリケイニオグ王国
+Kingdom of Gwynedd	グウィネズ王国
+Kingdom of Powys	ポウィス王国
+Kingdom of Morgannwg	モルガヌグ王国
+Dál Riata	ダルリアダ王国
+Bavarians	バイエルン人
+Early Lý Dynasty	前李朝(万春)
+Classic Veracruz Culture	ベラクルス文化
+Yenisei Kyrgyz	キルギス
+Northern Qi	北斉
+Chalukya Dynasty	チャールキヤ朝
+Chenla	真臘
+Maukhari Dynasty	マウカリ朝
+Kingdom of Bernicia	バーニシア王国
+Göktürk Khaganate	突厥
+(Chenla)	真臘
+Avar Khaganate	アヴァール
+Turk Shahis	トルコ・シャーヒー朝
+Chen Dynasty	陳(南朝)
+Northern Zhou	北周
+Later Western Liang	後梁(西梁)
+Georgia	ジョージア(グルジア)	~1991
+Georgia	ジョージア	1992~
+Duchy of Thuringia	テューリンゲン公国
+Duchy of Tuscia	トゥスキア公国
+Duchy of Benevento	ベネヴェント公国
+Duchy of Spoleto	スポレート公国
+Hwicce	フウィッチェ王国
+Kingdom of Italy	ランゴバルド王国	~800
+Kingdom of Italy	イタリア王国(中世)	801~1500
+Kingdom of Italy	イタリア王国	1501~
+Eastern Göktürks	東突厥
+Sui Dynasty	隋
+Breton Kingdoms	ブルターニュの諸王国
+Western Göktürks	西突厥
+Karkota Dynasty	カルコータ朝
+Kingdom of Dunoting	ドゥノティング王国
+Pandya Dynasty	パーンディヤ朝
+Kingdom of Rheged	レゲド王国
+Gauda Kingdom	ガウダ王国
+Dumnonia	ドゥムノニア王国
+Magna Frisia	フリースラント
+Frisia Kingdom	フリースラント王国
+Kingdom of Northumbria	ノーサンブリア王国
+Harsha's Empire	ヴァルダナ朝
+Tibetan Empire	吐蕃
+Tang Dynasty	唐
+Samo's Empire	サモ王国
+Gao Kaidao	高開道の燕
+Kashmir	カシミール
+Aquitaine	アキテーヌ
+Khazaria	ハザール
+Rashidun Caliphate	正統カリフ時代のイスラーム国家
+Byzantine Empire	ビザンツ帝国
+Old Great Bulgaria	大ブルガリア
+Balasagan	バラサガン
+Kingdom of Lazica	ラジカ王国
+Lavo Kingdom	ラヴォ王国(ドヴァーラヴァティー)
+Dabuyid Dynasty	ダーブーイェ朝
+Strathclyde	ストラスクライド王国
+Khadga Dynasty	カドガ朝
+Umayyad Caliphate	ウマイヤ朝
+Haripuñjaya	ハリプンチャイ王国
+Carantania	カランタニア
+Turks	テュルク系諸部族
+Sunda Kingdom	スンダ王国
+Srivijaya	シュリーヴィジャヤ王国
+Volga Bulgaria	ヴォルガ・ブルガール
+Galuh Kingdom	ガルー王国
+Unified Silla	新羅(統一新羅)
+Principality of Iberia	イベリア公国(カフカス)
+First Bulgarian Empire	第1次ブルガリア帝国
+Türgesh	突騎施
+Cyprus Condominium	キプロス共同統治
+Balhae	渤海
+Republic of Venice	ヴェネツィア共和国
+Nara Japan	日本(奈良時代)
+Cornwall	コーンウォール
+Merovingian Empire	フランク王国(メロヴィング朝)
+Water Chenla	水真臘
+Land Chenla	陸真臘
+Carolingian Empire	フランク王国(メロヴィング朝)	~750
+Carolingian Empire	フランク王国(カロリング朝)	751~
+(Carolingian Empire)	フランク王国(メロヴィング朝)	~750
+(Carolingian Empire)	フランク王国(カロリング朝)	751~
+Kingdom of Asturias	アストゥリアス王国
+Kingdom of Neustria	ネウストリア
+Kannauj-Varman Dynasty	カナウジのヴァルマン朝
+Gurjara-Pratihara Dynasty	プラティーハーラ朝
+Mataram Kingdom	古マタラム(シャイレンドラ朝など)
+Nanzhao	南詔
+Duchy of Croatia	クロアティア公国
+Oghuz Turks	オグズ
+Pala Empire	パーラ朝
+Uyghur Khaganate	ウイグル
+Emirate of Nekor	ネコール王国
+Abbasid Caliphate	アッバース朝
+Kimek-Kipchak confederation	キメク・キプチャク
+Fihrids	フィフル家
+Kharijites	ハワーリジュ派
+Rashtrakuta Dynasty	ラーシュトラクータ朝
+Papal States	教皇領
+Emirate of Córdoba	後ウマイヤ朝
+Duchy of Naples	ナポリ公国
+Principality of Serbia	セルビア侯国
+Duchy of Gascony	ガスコーニュ公国
+Rustamid dynasty	ルスタム朝
+Frisia	フリースラント
+Obotrites	オボトリート族
+Viking settlements	ヴァイキングの居住地
+Frisians	フリース人
+Qarlugs	カルルク
+Idrisids	イドリース朝
+Ghana Empire	ガーナ王国
+Barghawata Conference	バルガワータ
+Heian Japan	日本(平安時代)
+Aghlabid Dynasty	アグラブ朝
+Khmer Empire	カンボジア(アンコール朝)	~1431
+Khmer Empire	カンボジア王国	1432~
+Kingdom of the Iberians	イベリア人の王国(カフカス)
+Great Moravia	大モラヴィア王国
+Principality of Nitra	ニトラ公国
+Kingdom of Pamplona	パンプローナ王国
+Kingdom of Brittany	ブルターニュ王国
+Shirvan	シルヴァン
+Kingdom of Sobrarbe	ソブラルベ伯国
+Emirate of Crete	クレタ首長国
+County of Aragon	アラゴン伯国
+Magyars	マジャール人
+Principality of Salerno	サレルノ公国
+Principality of Capua	カープア公国
+Kara-Khanids	カラハン朝
+Middle Franks	中フランク王国
+Pagan Kingdom	パガン朝
+West Franks	西フランク王国
+Chola Empire	チョーラ朝
+Puebloans - Chaco Regional System	プエブロ人(チャコ文化)
+East Franks	東フランク王国
+Later Mayan City-States	マヤの都市国家(後古典期)
+Tibetans	チベット諸勢力
+Emirate of Sicily	シチリア首長国
+Lower Burgundy	下ブルグント王国
+Ganzhou Kingdom	甘州ウイグル
+Saffarid Dynasty	サッファール朝
+Qocho Kingdom	西ウイグル(天山ウイグル)
+Sind-Habbari Dynasty	ハッバーリー朝(シンド)
+Giudicato of Cagliari	カリャリ判事国
+Ziyadid dynasty	ズィヤード朝
+Giudicato of Gallura	ガッルーラ判事国
+Zaydi Alid dynasties	ザイド派のアリー家政権
+Giudicato of Logudoro	ログドーロ判事国
+Old Kingdom of Norway	ノルウェー王国
+Giudicato of Arborea	アルボレア判事国
+County of Ribagorza	リバゴルサ伯国
+County of Urgell	ウルジェイ伯国
+Toltec	トルテカ
+Tulunids	トゥールーン朝
+County of Pallars	パリャース伯国
+Danelaw	デーンロー
+Kingdom of Seisyllwg	セイシルウグ王国
+Rus'	ルーシ
+Kievan Rus'	キエフ公国
+Bagratid Armenia	バグラトゥニ朝アルメニア
+Samanid Empire	サーマーン朝
+Upper Burgundy	上ブルグント王国
+Kingdom of Khotan	ホータン王国(于闐)
+Hubaekje	後百済
+Duchy of Bohemia	ベーメン公国
+County of Rosellón	ルサリョ伯国
+Sajid Dynasty	サージュ朝
+County of Besalú	バザルー伯国
+County of Berga	ベルガ伯国
+Nitra	ニトラ
+County of Barcelona	バルセロナ伯国
+Qarmatians	カルマト派
+Kingdom of Alba	アルバ王国(スコットランド)
+Principality of Hungary	ハンガリー大公国
+Chandra Dynasty	チャンドラ朝
+Kingdom of Lower Burgundy	下ブルグント王国
+Yan Kingdom	燕(桀燕)
+Min	閩
+Later Jin	後晋
+Southern Han	南漢
+Fatimid Caliphate	ファーティマ朝
+(Five Dynasties and Ten Kingdoms)	五代十国
+Kingdom of León	レオン王国
+Liao Dynasty	遼(契丹)
+Kingdom of Galicia	ガリシア王国
+Former Shu	前蜀
+Later Liang Dynasty	後梁
+Kingdom of Germany	ドイツ王国(東フランク)
+Taebong	泰封(後高句麗)
+Wuyue	呉越
+Kingdom of Vaspurakan	ヴァスプラカン王国
+Chimor	チムー
+Southern Chu	楚(南楚)
+Southern Wu	呉(楊呉)
+Qi Kingdom	岐
+Early Balinese Kingdoms	バリの諸王国
+Duchy of Normandy	ノルマンディー公国
+(Holy Roman Empire)	神聖ローマ帝国
+Former Jin	晋(李克用)
+Upper Burgundy and Italy	ブルグント・イタリア王国
+Goryeo	高麗
+Kingdom of Croatia	クロアティア王国
+Jingnan	荊南
+Later Tang	後唐
+Caliphate of Córdoba	後ウマイヤ朝
+(Kingdom of England)	イングランド王国
+Icelandic Commonwealth	アイスランド共和国(中世)
+Kingdom of England	イングランド王国
+Kingdom of Arles	アルル王国
+(Kingdom of Denmark)	デンマーク王国
+Hamdanid Emirates	ハムダーン朝
+Kingdom of Denmark	デンマーク王国
+Ziyarid dynasty	ズィヤール朝
+Later Shu	後蜀
+Buyid Dynasty	ブワイフ朝
+Ngô Dynasty	ベトナム(呉朝・丁朝・前黎朝)	~1009
+Ngô Dynasty	大越(李朝)	1010~1225
+Ngô Dynasty	大越(陳朝)	1226~1400
+Ngô Dynasty	大越(胡朝)	1401~
+Zagwe dynasty	ザグウェ朝
+Kingdom of Dali	大理
+Jaemtland	イェムトランド
+Abbasid Caliphate/Buyid Dynasty	アッバース朝(ブワイフ朝支配下)
+Duchy of Brittany	ブルターニュ公国
+Later Han	後漢(五代)
+Chaulukya Dynasty	チャウルキヤ朝
+Southern Tang	南唐
+Northern Han	北漢
+Later Zhou	後周
+Republic of Amalfi	アマルフィ共和国
+Chandela Kingdom	チャンデーラ朝
+Utpala Dynasty	ウトパラ朝
+Kingdom of Castile	カスティリャ王国
+Northern Song	宋(北宋)
+Ghaznavid Empire	ガズナ朝
+Kingdom of Poland	ポーランド王国
+Holy Roman Empire	神聖ローマ帝国
+(Kingdom of Poland)	ポーランド王国
+Western Chalukya Empire	後期チャールキヤ朝
+Paramara Dynasty	パラマーラ朝
+Chauhan Dynasty	チャウハーン朝
+Kingdom of Sweden	スウェーデン王国
+County of Toulouse	トゥールーズ伯領
+County of Blôis	ブロワ伯領
+County of Vexin	ヴェクサン伯領
+County of Flanders	フランドル伯領
+Western Xia	西夏
+Seljuk Dynasty	セルジューク朝
+County of Maine	メーヌ伯領
+County of Vermandois	ヴェルマンドワ伯領
+County of Rouergue	ルエルグ伯領
+(Kingdom of France)	フランス王国
+County of Champagne	シャンパーニュ伯領
+County of Anjou	アンジュー伯領
+Duchy of Aquitaine	アキテーヌ公領
+County of Osona	オゾナ伯国
+Kingdom of France	フランス王国
+County of Ampuria	エンプリエス伯国
+Kingdom of Hungary	ハンガリー王国
+Duchy of Burgundy	ブルゴーニュ公国
+Lohara Dynasty	ローハラ朝
+Taifa of Valencia	バレンシア王国(ターイファ)
+(Taifas of Iberia)	イベリア半島のターイファ諸国
+Kingdom of Georgia	ジョージア王国(グルジア)
+Taifa of Alpuente	アルプエンテ王国(ターイファ)
+Taifa of Toledo	トレド王国(ターイファ)
+Republic of Pisa	ピサ共和国
+Taifa of Dénia	デニア王国(ターイファ)
+Taifa of Badajoz	バダホス王国(ターイファ)
+Taifa of Tortosa	トルトサ王国(ターイファ)
+County of Nevers	ヌヴェール伯領
+Republic of Genoa	ジェノヴァ共和国
+Taifa of Arcos	アルコス王国(ターイファ)
+Taifa of Albarracín	アルバラシン王国(ターイファ)
+Taifa of Almería	アルメリア王国(ターイファ)
+Taifa of Zaragoza	サラゴサ王国(ターイファ)
+Taifa of Morón	モロン王国(ターイファ)
+Taifa of Saltés and Huelva	ウエルバ王国(ターイファ)
+Taifa of Niebla	ニエブラ王国(ターイファ)
+Taifa of Murcia	ムルシア王国(ターイファ)
+Kingdom of Aragon	アラゴン王国
+Taifa of Carmona	カルモナ王国(ターイファ)
+Taifa of Granada	グラナダ王国(ターイファ)
+Taifa of Santa Maria do Algarve	アルガルヴェ王国(ターイファ)
+North Sea Empire	北海帝国(クヌート)
+Hammadid Dynasty	ハンマード朝
+Taifa of Algeciras	アルヘシラス王国(ターイファ)
+Taifa of Seville	セビーリャ王国(ターイファ)
+Kahuripan	クディリ以前のジャワ王国(カフリパン)
+Norman Italy	ノルマン人の南イタリア
+Taifa of Silves	シルヴェス王国(ターイファ)
+County of Pallars Jussà	パリャース・ジュサ伯国
+County of Pallars Sobirà	パリャース・スビラ伯国
+Denmark-England	デンマーク・イングランド
+Great Seljuk Empire	セルジューク朝
+Takrur	タクルール王国
+Taifa of Ronda	ロンダ王国(ターイファ)
+Kingdom of Janggala	ジャンガラ王国
+Eastern Kara-Khanids	東カラハン朝
+Norway-Denmark	ノルウェー・デンマーク
+Western Karakhanid Khanate	西カラハン朝
+Kediri Kingdom	クディリ朝
+Zirid dynasty	ズィール朝
+Sulayhid Dynasty	スライフ朝
+Halych-Volhynia occupation	ハールィチ・ヴォルィーニ
+Principality of Volhynia	ヴォルィーニ公国
+Principality of Kiev	キエフ公国
+Great Principality of Duklja	ドゥクリャ大公国
+Almoravid Dynasty	ムラービト朝
+Principality of Rostov-Suzdal	ロストフ・スーズダリ公国
+Principality of Chernigov	チェルニーヒウ公国
+Principality of Peremyshl	プシェミシル公国
+Principality of Pereyaslavl	ペレヤスラフ公国
+Eastern Ganga Kingdom	東ガンガ朝
+Principality of Smolensk	スモレンスク公国
+Cuman-Kipchak Confederation	クマン・キプチャク
+Principality of Polotsky	ポロツク公国
+Novgorod Republic	ノヴゴロド国
+Najahid Dynasty	ナジャーフ朝
+Taifa of Ceuta	セウタ王国(ターイファ)
+Sena Dynasty	セーナ朝
+Uyunid Emirate	ウユーン朝
+Norman England	イングランド王国(ノルマン朝)
+Kingdom of Polonnaruwa	ポロンナルワ王国
+Empire of Kanem	カネム王国
+Kingdom of Duklja	ドゥクリャ王国
+Norse Greenland	ノルマン人のグリーンランド
+Gahadavala Dynasty	ガーハダヴァーラ朝
+Zurayid dynasty	ズライ朝
+Kingdom of the Isles	諸島王国
+Principality of Terebovlia	テレボヴリャ公国
+Sultanate of Rum	ルーム・セルジューク朝
+Danishmendids	ダニシュメンド朝
+Khwarezmid Dynasty	ホラズム・シャー朝
+Northern Fujiwara	奥州藤原氏
+Grand Principality of Serbia	セルビア大公国
+Principality of Ryazan	リャザン公国
+County of Edessa	エデッサ伯国
+Armenian Kingdom of Cilicia	キリキア・アルメニア王国
+Kingdom of Jerusalem	イェルサレム王国
+Principality of Antioch	アンティオキア公国
+Principality of Koknese	コクネセ公国
+Principality of Drutsk	ドルツク公国
+Hoysala Kingdom	ホイサラ朝
+County of Tripoli	トリポリ伯国
+Principality of Minsk	ミンスク公国
+Principality of Jersika	イェルシカ公国
+Principality of Vitebsk	ヴィテプスク公国
+Kara-Khitans	西遼(カラキタイ)
+Great Jin	金
+Angevins	アンジュー家
+(Duchies of Poland)	ポーランドの諸公国
+Duchy of Silesia	シロンスク公国
+Southern Song	宋(南宋)
+County of Portugal	ポルトゥカーレ伯領
+Zengid dynasty	ザンギー朝
+Kingdom of Navarre	ナバラ王国
+Duchy of Łęczyca	ウェンチツァ公国
+Pomerania	ポメラニア
+Kingdom of Sicily	シチリア王国
+Duchy of Greater Poland	大ポーランド公国
+Duchy of Sandomierz	サンドミェシュ公国
+Duchy of Masovia	マゾフシェ公国
+Sultanate of Kedah	ケダ王国
+Almohad Caliphate	ムワッヒド朝
+Angevin Empire	アンジュー帝国(プランタジネット朝)
+Kingdom of Portugal	ポルトガル王国
+Taifa of Tejada	テハダ王国(ターイファ)
+Taifa of Córdoba	コルドバ王国(ターイファ)
+Principality of Halych	ハールィチ公国
+Kingdom of Africa	ノルマン人のアフリカ王国
+Ghurid Dynasty	ゴール朝
+Puebloans - Aztec Regional System	プエブロ人(アステカ遺跡文化)
+Nabhani Dynasty	ナブハーン朝
+Duchy of Wrocław	ヴロツワフ公国
+Mahdids	マフディー朝
+Kingdom of Powys Wenwynwyn	ポウィス・ウェンウィンウィン王国
+Kingdom of Powys Fadog	ポウィス・ヴァドグ王国
+Crown of Aragon	アラゴン連合王国
+Duchy of Opole	オポーレ公国
+Kingdom of Mann	マン島王国
+Ayyubid Sultanate	アイユーブ朝
+Kakatiya Dynasty	カーカティーヤ朝
+Kingdom of Serbia	セルビア王国
+Second Bulgarian Empire	第2次ブルガリア帝国
+Shunten Dynasty	舜天王統(琉球)
+Banate of Bosnia	ボスニア
+Principality of Turov and Pinsk	トゥーロフ・ピンスク公国
+Kamakura Shogunate	日本(鎌倉幕府)
+Yadava Dynasty	ヤーダヴァ朝
+Duchy of Kuyavia	クヤヴィ公国
+Chimu Empire	チムー王国
+County of Boulogne	ブローニュ伯領
+Kingdom of Cyprus	キプロス王国
+Kathmandu	カトマンズ(マッラ朝)
+Texcoco	テツココ
+(Kingdom of Bohemia)	ベーメン王国
+Principality of Galicia-Volhynia	ハールィチ・ヴォルィーニ公国
+Livonian Brothers of the Sword	リヴォニア帯剣騎士団
+Sosso Empire	ソソ王国
+Kingdom of Bohemia	ベーメン王国
+Khwarezmid Empire	ホラズム・シャー朝
+Namayan	ナマヤン王国
+Despotate of Epirus	エペイロス専制公国
+Latin Empire	ラテン帝国
+Negroponte	ネグロポンテ
+Mongol Empire	モンゴル帝国
+County of Armagnac	アルマニャック伯領
+County of Périgord	ペリゴール伯領
+County of Poitou	ポワトゥー伯領
+Principality of Achaea	アカイア公国
+County of Auvergne	オーヴェルニュ伯領
+Duchy of Athens	アテネ公国
+Empire of Trebizond	トレビゾンド帝国
+Nicaean Empire	ニケーア帝国
+Kingdom of Thessalonica	テッサロニキ王国
+Domain of Rhodes	ロドス
+County of Touraine	トゥーレーヌ伯領
+(Delhi Sultanate)	デリー=スルタン朝
+Duchy of the Archipelago	ナクソス公国
+Duchy of Kalisz	カリシュ公国
+Mamluk Dynasty	奴隷王朝
+Pandya Empire	パーンディヤ朝
+Grand Duchy of Lithuania	リトアニア大公国
+Singhasari	シンガサリ朝
+Teutonic Order	ドイツ騎士団領
+Rasulid Dynasty	ラスール朝
+County of Foix	フォワ伯領
+Mali Empire	マリ王国
+Empire of Thessalonica	テッサロニキ帝国
+Hafsid Dynasty	ハフス朝
+Zayyanid dynasty	ザイヤーン朝
+Ceylon	セイロンの王国
+Kingdom of Dambadeniya	ダンバデニヤ王国
+Crown of Castile	カスティリャ王国
+Mamluk Sultanate	マムルーク朝
+County of Artois	アルトワ伯領
+Sukhothai Kingdom	スコータイ朝
+Emirate of Granada	ナスル朝(グラナダ王国)
+Capetian House of Anjou	アンジュー伯領(カペー家)
+Duchy of Głogów	グウォグフ公国
+Marinid Sultanate	マリーン朝
+County of Holland	ホラント伯領
+Republic of Florence	フィレンツェ共和国	~1531
+Republic of Florence	フィレンツェ公国(メディチ家)	1532~
+House of Luxembourg	ルクセンブルク家領
+Margraviate of Brandenburg	ブランデンブルク辺境伯領
+Duchy of Styria	シュタイアーマルク公国
+County of Savoy	サヴォイア伯領
+House of Hohenstaufen	シュタウフェン家領
+Dauphiné	ドーフィネ
+House of Wittelsbach	ヴィッテルスバッハ家領
+County of Brabant	ブラバント公領
+House of Habsburg	ハプスブルク家領
+Bahrani Dynasty	バハレーンの政権(ジャルワーン朝など)
+Principality of Orange	オランジュ公国
+Duchy of Bavaria	バイエルン公国
+House of Ascania	アスカーニエン家領
+Patriarchate of Aquileia	アクイレイア総大司教領
+Holy Roman Empire Minor States	神聖ローマ帝国の小領邦
+Thessaly	テッサリア
+House of Anjou-Sicily	ナポリ王国(アンジュー家)
+Samudera Pasai Sultanate	サムドラ・パサイ王国
+Ethiopian Empire	エチオピア帝国
+Comtat Venaissin	ヴネッサン伯領(教皇領)
+Kingdom of Majorca	マヨルカ王国
+Duchies of Poland	ポーランドの諸公国
+Duchy of Jawor	ヤヴォル公国
+Duchy of Legnica	レグニツァ公国
+Grand Duchy of Kraków	クラクフ大公国
+Kampili Kingdom	カンピリ王国
+Pskov Republic	プスコフ共和国
+Kingdom of Syrmia	スレム王国
+Ifat Sultanate	イファト・スルタン国
+Duchy of Racibórz	ラチブシュ公国
+Kingdom of Naples	ナポリ王国
+Duchy of Bytom	ビトム公国
+Cuzco	クスコ王国
+Malaya	マレー半島の諸国
+Nizhny Novgorod	ニジニ・ノヴゴロド公国
+Yuan Dynasty	元
+Khalji Dynasty	ハルジー朝
+Grand Principality of Moscow	モスクワ大公国
+Kingdom of Scotland	スコットランド王国
+Principality of Pinsk	ピンスク公国
+Majapahit	マジャパヒト王国
+Principality of Vladimir-Suzdal	ウラジーミル・スーズダリ大公国
+Shan States	シャン諸国
+Ilkhanate	イル=ハン国
+Hanthawaddy Kingdom	ペグー朝(ハンターワディ)
+Swiss Confederation	スイス
+Phayao Kingdom	パヤオ王国
+Myinsaing Kingdom	ミンサイン王国
+Lan Na Kingdom	ラーンナー王国
+Principality of Beloozero	ベロオーゼロ公国
+Chagatai Khanate	チャガタイ=ハン国
+Golden Horde	キプチャク=ハン国
+Galicia-Volhynia	ハールィチ・ヴォルィーニ公国
+Principality of Turov	トゥーロフ公国
+Tver	トヴェリ公国
+Beylik of Aydin	アイドゥン侯国
+Beylik of Karasi	カラスィ侯国
+Beylik of Hamid	ハミド侯国
+Beylik of Sinop	シノプ侯国
+Eshrefids	エシュレフ侯国
+Germiyanids	ゲルミヤン侯国
+Kingdom of Singapura	シンガプラ王国
+Michoacán	タラスコ王国(ミチョアカン)
+Kastamonu	カスタモヌ侯国
+Beylik of Menteshe	メンテシェ侯国
+Beylik of Isfendiyar	イスフェンディヤル侯国
+Ahi Republic	アヒー(アンカラ)
+Ottoman Empire	オスマン帝国
+Beylik of Karaman	カラマン侯国
+Principality of Wallachia	ワラキア公国
+Beylik of Saruhan	サルハン侯国
+Nanzan	南山(琉球)
+Chüzan	中山(琉球)
+Hokuzan	北山(琉球)
+Catalan Company	カタルーニャ傭兵団
+Jaffna kingdom	ジャフナ王国
+Kingdom of Pinya	ピンヤ朝
+Tenochtitlan	テノチティトラン
+Sagaing Kingdom	ザガイン朝
+Tughlaq Dynasty	トゥグルク朝
+Beylik of Teke	テケ侯国
+Earldom of Ulster	アルスター伯領
+Earldom of Desmond	デズモンド伯領
+Kenmu Restoration	日本(建武の新政・南北朝)
+Principality of Theodoro	テオドロ公国
+Free County of Burgundy	ブルゴーニュ伯領(フランシュ=コンテ)
+Danish Magnates	デンマークの諸侯
+House of Bourbon	ブルボン家領
+Electorate of Trier	トリーア選帝侯領
+Principality of Valona	ヴロラ公国
+Kartids	クルト朝
+Sarbadars	サルバダール政権
+Kashmiri Sultanate	カシミール・スルタン国
+Isle of Man	マン島
+Injuids	インジュー朝
+Chobanids	チョバン朝
+Sultanate of Bengal	ベンガル・スルタン国
+Sind-Samma Dynasty	サンマ朝(シンド)
+Ashikaga Shogunate	日本(室町幕府)
+Commune of the Zealots	ゼーロータイの自治(テッサロニキ)
+Vijayanagara Empire	ヴィジャヤナガル王国
+Jalayirid Sultanate	ジャライル朝
+Beylik of Dulkadir	ドゥルカディル侯国
+Muzaffarids	ムザッファル朝
+Serbian Empire	セルビア帝国
+Ayutthaya Kingdom	アユタヤ朝
+Bahmani Sultanate	バフマニー朝
+Principality of Moldavia	モルダヴィア公国
+Sultanate of Brunei	ブルネイ
+Electorate of Saxony	ザクセン選帝侯領
+House of Tocco	トッコ家領
+House of Valois-Anjou	アンジュー公領(ヴァロワ家)
+Tibet	チベット
+Despotate of Vidin	ヴィディン専制公国
+White Horde	白帳ハン国
+Blue Horde	青帳ハン国
+Despotate of Dobruja	ドブロジャ専制公国
+Lan Xang	ラーンサーン王国
+Tondo	トンド王国
+Ava Kingdom	アヴァ朝
+Ming Dynasty	明
+Northern Yuan	北元
+Serbian Despots	セルビア専制公国
+Timurid Empire	ティムール朝
+Qara Qoyunlu	黒羊朝
+Despotate of Arta	アルタ専制公国
+Albanian Principalities	アルバニアの諸侯国
+County of Béarn	ベアルン子爵領
+Margraviate of Moravia	モラヴィア辺境伯領
+Kingdom of Bosnia	ボスニア王国
+Bornu Empire	ボルヌ帝国
+Republic of Ragusa	ラグーザ共和国
+Ramadanid Emirate	ラマザン侯国
+Joseon	朝鮮(李氏朝鮮)
+Jaunpur Sultanate	ジャウンプル・スルタン国
+(Polish-Lithuania Kingdom)	ポーランド・リトアニア(ヤギェウォ朝)
+Principality of Valona and Kanina	ヴロラ・カニナ公国
+(Kalmar Union)	カルマル同盟
+Four Oirats	オイラト
+Duchy of Milan	ミラノ公国
+Kalmar Union	カルマル同盟
+Aq Qoyunlu	白羊朝
+Sayyid Dynasty	サイイド朝
+Hashemite Arab Federation	メッカのシャリーフ政権
+Adal Sultanate	アダル・スルタン国
+Makuria Kingdom	マクリア王国
+Electorate of Brandenburg	ブランデンブルク選帝侯領
+Livonian Conference	リヴォニア連盟
+Lê Dynasty	黎朝
+Kingdom of Mrauk U	アラカン王国(ミャウー)
+Ryukyu Kingdom	琉球王国
+Khanate of Sibir	シビル=ハン国
+Duchy of Luxembourg	ルクセンブルク公国
+Aztec Triple Alliance	アステカ王国
+Duchy of Lorraine	ロレーヌ公国
+Inca Empire	インカ帝国
+Kingdom of Kongo	コンゴ王国
+Khanate of Kazan	カザン=ハン国
+Crimean Khanate	クリム=ハン国
+Nogai Horde	ノガイ・オルダ
+House of Jagiellon	ヤギェウォ家領(ポーランド・リトアニア)
+Ambrosian Republic	アンブロジアーナ共和国
+House of Oldenburg	オルデンブルク家(カルマル同盟)
+Haudenosaunee	イロコイ連邦
+Ryazan	リャザン公国
+Qasim Khanate	カシモフ=ハン国
+Lodi Dynasty	ロディー朝
+Duchy of Saint Sava	聖サヴァ公国(ヘルツェゴヴィナ)
+(Habsburg Monarchy)	ハプスブルク君主国
+Sultanate of Sulu	スールー王国
+Tahirid Sultanate	ターヒル朝
+Sultanate of Palembang	パレンバン王国
+Sultanate of Malacca	マラッカ王国	~1511
+Sultanate of Malacca	マレー半島の諸王国	1512~
+Moghulistan	モグーリスタン=ハン国
+Songhai Empire	ソンガイ王国
+Kingdom of Kartli	カルトリ王国
+East Turkestan	東トルキスタンの政権
+Kingdom of Imereti	イメレティ王国
+Principality of Abkhazia	アブハジア公国
+Samtskhe-Saatabago	サムツヘ・サアタバゴ
+Astrakhan Khanate	アストラハン=ハン国
+Kazakh Khanate	カザフ=ハン国
+Warring States Japan	日本(戦国時代)
+Principality of Mingrelia	ミングレリア公国
+Mongol Khanate	モンゴル(北元以後の諸部)
+Kingdom of Kakheti	カヘティ王国
+Wattasid dynasty	ワッタース朝
+Principality of Guria	グリア公国
+Demak Sultanate	ドゥマク王国
+Kapisa	カーピシー
+Prome Kingdom	プローム王国
+Sultanate of Cirebon	チルボン王国
+Habsburg Monarchy	ハプスブルク君主国
+Ahmadnagar Sultanate	アフマドナガル王国
+Berar Sultanate	ベラール王国
+Bijapur Sultanate	ビジャープル王国
+Eastern Chagatai Khanate	東チャガタイ=ハン国
+Bidar Sultanate	ビーダル王国
+Shaybanids	シャイバーン朝
+Rajahnate of Cebu	セブ王国
+(Portuguese Empire)	ポルトガル海上帝国
+Portuguese Empire	ポルトガル海上帝国
+Safavid Dynasty	サファヴィー朝
+First Toungoo Empire	タウングー朝
+Portuguese Ceylon	ポルトガル領セイロン
+Funj Sultanate	フンジ・スルタン国
+Portuguese Africa	ポルトガル領アフリカ
+Sultanate of Gowa	ゴワ王国
+Khanate of Khiva	ヒヴァ=ハン国
+Sultanate of Bone	ボネ王国
+Spanish Empire	スペイン帝国(植民地)
+Sultanate of Aceh	アチェ王国
+Kingdom of Spain	スペイン王国	~1930
+Kingdom of Spain	スペイン	1931~
+(Spanish Empire)	スペイン帝国
+Khanate of Bukhara	ブハラ=ハン国
+Blambangan Kingdom	ブランバンガン王国
+Golconda Sultanate	ゴールコンダ王国
+Eastern Moghulistan	東モグーリスタン
+Balinese Kingdom	バリ王国
+Western Moghulistan	西モグーリスタン
+Sultanate of Maguindanao	マギンダナオ王国
+Maynila	マニラ王国
+Denmark-Norway	デンマーク=ノルウェー	~1814
+Denmark-Norway	デンマーク	1815~
+Sultanate of Banjar	バンジャル王国
+Duchy of Prussia	プロイセン公国
+Nayaks of Madurai	マドゥライ・ナーヤカ朝
+Sultanate of Banten	バンテン王国
+Mughal Empire	ムガル帝国
+Đại Việt	大越(後黎朝)
+Sultanate of Perak	ペラ王国
+Sultanate of Johor	ジョホール王国
+Eastern Hungarian Kingdom	東ハンガリー王国
+Nayaks of Thanjavur	タンジャーヴール・ナーヤカ朝
+Hussain Shahi Dynasty	フサイン・シャーヒー朝
+Sur Empire	スール朝
+Tümed	トゥメト部(アルタン=ハーン)
+Itza Mayans	イツァ・マヤ(タヤサル)
+Tsardom of Russia	ロシア(ツァーリ国)
+Sultanate of Harar	ハラール・スルタン国
+Don Cossacks	ドン・コサック
+France Antarctique	南極フランス(リオデジャネイロ)
+Saadi Sultanate	サード朝
+Small Horde	小ジュズ
+Portuguese Colonies	ポルトガル植民地
+House of Savoy	サヴォイア公国
+Kingdom of Mysore	マイソール王国
+Trịnh lords	鄭氏(北ベトナム)
+Kingdom of Pajana	パジャン王国
+Nguyễn lords	広南阮氏
+Principality of Transylvania	トランシルヴァニア公国
+Polish-Lithuanian Commonwealth	ポーランド=リトアニア共和国
+Patani Kingdom	パタニ王国
+Union of Utrecht	ユトレヒト同盟
+Iberian Union	スペイン・ポルトガル同君連合
+(Dutch Republic)	オランダ(ネーデルラント連邦共和国)
+Dutch Republic	オランダ(ネーデルラント連邦共和国)
+Khoshut Khanate	ホシュート部
+Mataram Sultanate	マタラム王国
+Gorkha Kingdom	ゴルカ朝
+Jesuit Reducciones	イエズス会の布教村(レドゥクシオン)
+Nalyvaiko Uprising	ナリヴァイコの反乱
+Tokugawa Shogunate	日本(江戸幕府)
+Lan Na	ラーンナー王国
+New France	ヌーヴェル・フランス
+Oyo Empire	オヨ王国
+Sultanate of Darfur	ダールフール・スルタン国
+English Colonial Empire	イギリスの植民地
+Dzungar Khanate	ジュンガル
+Swedish Empire	スウェーデン(バルト帝国)
+Brandenburg-Prussia	ブランデンブルク=プロイセン
+Sultanate of Sukadana	スカダナ王国
+Sultanate of Sambas	サンバス王国
+Sultanate of Mempawah	ムンパワ王国
+Later Jin Dynasty	後金
+Oirat Confederation	オイラト
+New Netherland	ニューネーデルラント
+Huguenots	ユグノーの拠点
+Sultanate of Bima	ビマ王国
+Yarubid dynasty	ヤアーリバ朝(オマーン)
+Li Zicheng	李自成の勢力
+Kalmyk Khanate	カルムイク=ハン国
+Kingdom of Bhutan	ブータン
+Qasimids	カーシム朝(イエメン)
+Wadai Empire	ワダイ王国
+New Sweden	ニュースウェーデン
+Catalonia	カタルーニャ共和国
+Principality of Monaco	モナコ
+Irish Catholic Confederation	アイルランド・カトリック同盟
+Southern Ming	南明
+Commonwealth of England	イングランド共和国
+Qing Dynasty	清
+Kutai Kingdom	クタイ王国
+Dutch Cape Colony	オランダ領ケープ植民地
+Dutch Gold Coast	オランダ領黄金海岸
+Danish Gold Coast	デンマーク領黄金海岸
+Zaporozhian Cossacks	ザポロージェ・コサック
+Sloboda Ukraine	スロボダ・ウクライナ
+Morocco	モロッコ(アラウィー朝)
+Sultanate of Jambi	ジャンビ王国
+French India	フランス領インド
+Maratha Empire	マラーター王国
+Thanjavur Maratha Kingdom	タンジャーヴール・マラーター王国
+Principality of Upper Hungary	上ハンガリー公国
+Dutch Ceylon	オランダ領セイロン
+Bali	バリの諸王国
+Cambodia	カンボジア王国
+Kingdom of Prussia	プロイセン王国
+Pro-Habsburg Spain	スペイン(ハプスブルク派)
+Ashanti Empire	アシャンティ王国
+(British Empire)	イギリス帝国
+British Colonial Empire	イギリスの植民地
+Regency of Algiers	アルジェ(オスマン帝国の州)
+Pro-Swedish Poland	ポーランド(スウェーデン派)
+Beylik of Tunis	チュニス(フサイン朝)
+Kingdom of Great Britain	グレートブリテン王国	~1800
+Kingdom of Great Britain	イギリス(連合王国)	1801~
+Vientiane	ヴィエンチャン王国
+Hotaki Dynasty	ホータキー朝
+Sikhs	シク教徒の勢力
+Kingdom of Champasak	チャンパーサック王国
+Kingdom of Luang Phrabang	ルアンプラバン王国
+Electorate of Hanover	ハノーファー選帝侯領
+Khanate of Kokand	コーカンド=ハン国
+Kingdom of Lunda	ルンダ王国
+Karamanli Dynasty	カラマンリー朝(トリポリ)
+Carnatic Sultanate	カーナティック太守領
+Bamana Empire	バンバラ王国(セグー)
+Nawabs of Bengal	ベンガル太守領
+Kingdom of Sardinia	サルデーニャ王国
+Principality of Svaneti	スヴァネティ公国
+Russian Empire	ロシア帝国
+Principality of Liechtenstein	リヒテンシュタイン
+Nawab of Awadh	アワド太守領
+Sultanate of Terengganu	トレンガヌ王国
+Hyderabad State	ハイデラバード藩王国
+Greenland	グリーンランド
+Duchy of Courland	クールラント公国
+Sultanate of Kutai Kartanegara	クタイ・カルタヌガラ王国
+Kingdom of Bulungan	ブルンガン王国
+Afsharid Iran	アフシャール朝
+Konbaung Dynasty	コンバウン朝
+Sultanate of Oman	オマーン
+Sultanate of Selangor	スランゴール王国
+Emirate of Diriyah	ワッハーブ王国(第1次サウード朝)
+Sultan of Yogyakarta	ジョクジャカルタ王国
+Surakarta Sunanate	スラカルタ王国
+Khanates of the Caucasus	カフカスの諸ハン国
+Durrani Empire	ドゥッラーニー朝(アフガン王国)
+Zand Dynasty	ザンド朝
+Corsican Republic	コルシカ共和国
+Kuwait	クウェート
+Bahrain	バーレーン
+Danish India	デンマーク領インド
+British Empire	イギリス東インド会社領
+Kelantan	クランタン王国
+Kingdom of Naples (Napoleonic)	ナポリ王国
+Sikh Confederacy	シク同盟
+Thonburi Kingdom	トンブリー朝
+Pontianak Kadriyah Sultanate	ポンティアナック王国
+Tây Sơn dynasty	西山朝
+Negeri Sembilan	ヌグリ・スンビラン
+Chiangmai	チエンマイ王国
+Nepal	ネパール
+United States of America	アメリカ合衆国
+Vermont Republic	ヴァーモント共和国
+House of Khalifa	ハリーファ家(バーレーン)
+Rattanakosin Kingdom	タイ(ラタナコーシン朝)
+Emirate of Bukhara	ブハラ=アミール国
+Qajar Dynasty	ガージャール朝
+Freetown Colony	フリータウン植民地
+French Colony of Guiana	フランス領ギアナ
+Kingdom of Hawaï'i	ハワイ王国
+(French First Republic)	フランス(第一共和政)
+Nguyễn dynasty	阮朝(越南)
+French First Republic	フランス(第一共和政)
+Haiti	ハイチ
+Merina Kingdom	メリナ王国
+British Cape Colony	イギリス領ケープ植民地
+Batavian Republic	バタヴィア共和国
+(Batavian Republic)	バタヴィア共和国
+(French Directory)	フランス(総裁政府)
+British Ceylon	イギリス領セイロン
+French Directory	フランス(総裁政府)
+Ligurian Republic	リグーリア共和国
+Grand Duchy of Tuscany	トスカーナ大公国
+Cisalpine Republic	チザルピーナ共和国
+Republic of San Marino	サンマリノ
+Helvetic Republic	ヘルヴェティア共和国
+Revolutionary Roman Republic	ローマ共和国(1798年)
+Sikh Empire	シク王国
+Cispadane Republic	チスパダーナ共和国
+(French Consulate)	フランス(統領政府)
+Septinsular Republic	イオニア七島連邦国
+Dutch East Indies	オランダ領東インド
+French Louisiana	フランス領ルイジアナ
+French Consulate	フランス(統領政府)
+Napoleonic Batavia Republic	バタヴィア共和国
+Electorate of Württemberg	ヴュルテンベルク選帝侯領
+Kingdom of Hanover	ハノーファー王国
+Electorate of Hesse	ヘッセン選帝侯国
+Electorate of Salzburg	ザルツブルク選帝侯領
+Kingdom of Etruria	エトルリア王国
+Electorate of Baden	バーデン選帝侯領
+Italian Republic	イタリア共和国(ナポレオン期)
+Empire of Haiti	ハイチ
+Muhammad Ali dynasty	エジプト(ムハンマド・アリー朝)
+First French colonial empire	フランスの植民地
+Sokoto Caliphate	ソコト・カリフ国
+(First French Empire)	フランス第一帝政
+Serbs	セルビア(公国)
+First French Empire	フランス第一帝政
+Duchy of Nassau	ナッサウ公国
+Saxe-Altenburg	ザクセン=アルテンブルク公国
+Grand Duchy of Baden	バーデン大公国
+Austrian Empire	オーストリア帝国
+Free City of Bremen	ブレーメン自由市
+Duchy of Oldenburg	オルデンブルク大公国
+Free City of Lübeck	リューベック自由市
+Principality of Regensberg	レーゲンスブルク侯国
+Principality of Waldeck and Pyrmont	ヴァルデック=ピルモント侯国
+Kingdom of Württemberg	ヴュルテンベルク王国
+Principality of Lippe	リッペ侯国
+Kingdom of Bavaria	バイエルン王国
+Grand Duchy of Würzburg	ヴュルツブルク大公国
+Principality of Reuss-Gera	ロイス=ゲーラ侯国
+Duchy of Mecklenburg	メクレンブルク大公国
+Grand Duchy of Hesse	ヘッセン大公国
+Grand Duchy of Saxe-Weimar-Eisenach	ザクセン=ヴァイマル=アイゼナハ大公国
+Principality of Hohenzollern-Sigmaringen	ホーエンツォレルン=ジグマリンゲン侯国
+Duchy of Anhalt	アンハルト公国
+Kingdom of Saxony	ザクセン王国
+Grand Duchy of Berg	ベルク大公国
+Duchy of Warsaw	ワルシャワ大公国
+Free City of Danzig	ダンツィヒ自由市
+Kingdom of Westphalia	ヴェストファーレン王国
+Confederation of the Rhine	ライン同盟
+New Granada	ヌエバ・グラナダ
+Republic of Venezuela	ベネズエラ共和国(第1次)
+Mexicans	メキシコ独立派
+(Netherlands)	オランダ
+Paraguay	パラグアイ
+Río de la Plata	ラプラタ連合州
+Bessarabia	ベッサラビア
+Guayaquil Junta	グアヤキル評議会
+Republic of Chile	チリ
+Omani Slave Coast	オマーン領東アフリカ沿岸
+Cundinamarca	クンディナマルカ
+Imamate of Yemen	イエメン・イマーム国
+Federal League	連邦同盟(アルティガス)
+Free City of Hamburg	ハンブルク自由市
+Sovereign Principality of the United Netherlands	ネーデルラント連合公国
+Duchy of Brunswick	ブラウンシュヴァイク公国
+Kingdom of Norway	ノルウェー
+Netherlands	オランダ
+Kingdom of Monaco	モナコ
+Bourbon Kingdom of France	フランス(復古王政・七月王政)
+Free City of Krakow	クラクフ共和国
+Duchy of Parma and Piacenza	パルマ公国
+Kingdom of the Two Sicilies	両シチリア王国
+(Bourbon Kingdom of France)	フランス(復古王政・七月王政)
+United Kingdoms of Sweden and Norway	スウェーデン=ノルウェー連合王国
+Duchy of Modena and Reggio	モデナ公国
+German Confederation	ドイツ連邦
+Netherlands Antilles	オランダ領アンティル
+Principality of Andorra	アンドラ
+Principality of Schwarzburg-Sonderhausen	シュヴァルツブルク=ゾンダースハウゼン侯国
+Talpur Dynasty	タールプル朝
+Saxe-Meiningen	ザクセン=マイニンゲン公国
+Massina Empire	マシナ帝国
+Zululand	ズールー王国
+Burma	ビルマ
+Principality of Lichtenberg	リヒテンベルク侯国
+Trucial States	休戦海岸(トルーシャル・ステーツ)
+Qatar Dynasty	カタール(サーニー家)
+Free City of Frankfurt	フランクフルト自由市
+Riau-Lingga Sultanate	リアウ・リンガ王国
+Empire of Brazil	ブラジル帝国
+Gran Colombia	大コロンビア
+First Mexican Empire	メキシコ帝国(第1次)
+First Hellenic Republic	ギリシア
+Republic of Peru	ペルー
+United Provinces of Central America	中央アメリカ連邦
+Emirate of Nejd	ネジド首長国(第2次サウード朝)
+Federated Republic of Mexico	メキシコ
+Bolivia	ボリビア
+Emirate of Jabal Shammar	ラシード朝(ジャバル・シャンマル)
+Emirate of Afghanistan	アフガニスタン
+Caucasian Imamate	カフカス・イマーム国
+Oriental Republic of Uruguay	ウルグアイ
+Poles	ポーランド蜂起軍
+Sultanate of Sambaliung	サンバリウン王国
+Kingdom of Belgium	ベルギー
+French Algeria	フランス領アルジェリア
+Venezuela	ベネズエラ
+Republic of New Granada	ヌエバ・グラナダ共和国
+Republic of Ecuador	エクアドル
+Argentine Confederation	アルゼンチン
+Peru-Bolivian Confederation	ペルー・ボリビア連合
+Centralist Mexico	メキシコ(中央集権共和国)
+Riograndense Republic	リオグランデ共和国
+Republic of Texas	テキサス共和国
+Saxe-Coburg and Gotha	ザクセン=コーブルク=ゴータ公国
+Durrani Dynasty	ドゥッラーニー朝
+Honduras	ホンジュラス
+Republic of the Rio Grande	リオグランデ共和国(メキシコ北部)
+Republic of Costa Rica	コスタリカ
+Guatemala	グアテマラ
+Natalia Republic	ナタール共和国
+Ottoman Tripolitania	オスマン帝国領トリポリタニア
+Republic of Nicaragua	ニカラグア
+Republic of El Salvador	エルサルバドル
+Los Altos	ロスアルトス
+Kingdom of Sarawak	サラワク王国
+Kedah-Perlis District	ケダ・プルリス
+Kashmir and Jammu	ジャンムー・カシミール藩王国
+Dominican Republic	ドミニカ共和国
+California Republic	カリフォルニア共和国
+French Africa	フランス領アフリカ
+Republic of Liberia	リベリア
+(French Second Republic)	フランス(第二共和政)
+Italian Nationalists	イタリア民族運動の勢力
+French Second Republic	フランス(第二共和政)
+Duchy of Holstein	ホルシュタイン公国
+Republic of Baden	バーデン共和国
+Hungarian Nationalists	ハンガリー民族運動の勢力
+Pahang Sultanate	パハン王国
+(Second French Empire)	フランス第二帝政
+Republic of Baja California	バハ・カリフォルニア共和国
+Montenegro	モンテネグロ
+Taiping Heavenly Kingdom	太平天国
+Mosquito Kingdom	モスキート王国
+State of Buenos Aires	ブエノスアイレス国
+Second French Empire	フランス第二帝政
+Majeerteen Sultanate	マジェルティーン・スルタン国
+Free Orange State	オレンジ自由国
+South African Republic	トランスヴァール共和国
+New Caledonia	ニューカレドニア
+People's Republic of Zanzibar	ザンジバル
+Panthay Rebellion	パンゼーの乱(雲南)
+United Principalities of Moldavia and Wallachia	ルーマニア
+British Raj	イギリス領インド帝国
+Granadine Confederation	グラナダ連合
+French Indochina	フランス領インドシナ
+Confederate States of America	アメリカ連合国(南部連合)
+United States of Colombia	コロンビア合衆国
+Mexican Monarchists	メキシコ王党派
+Second Mexican Empire	メキシコ帝国(第2次)
+Khedivate of Egypt	エジプト(副王国)
+Republic of Colombia	コロンビア
+Austria-Hungary	オーストリア=ハンガリー帝国
+Kamerun	カメルーン
+Empire of Japan	大日本帝国
+North German Confederation	北ドイツ連邦
+Mexico	メキシコ
+German Africa	ドイツ領アフリカ
+French Third Republic	フランス(第三共和政)
+(French Third Republic)	フランス(第三共和政)
+German Empire	ドイツ帝国
+Kingdom of Fiji	フィジー王国
+British Gold Coast	イギリス領黄金海岸
+First Spanish Republic	スペイン(第一共和政)
+Sultanate of Hobyo	ホビョ・スルタン国
+Principality of Bulgaria	ブルガリア
+Nieuwe Republiek	ニュー・リパブリック
+Swaziland	スワジランド
+British Africa	イギリス領アフリカ
+Italian Africa	イタリア領アフリカ
+New Hebrides	ニューヘブリディーズ
+Luxembourg	ルクセンブルク
+Brazilian Republic	ブラジル
+Belgian Congo	コンゴ自由国・ベルギー領コンゴ
+Mahdist State	マフディー国家
+Cuban Nationalists	キューバ独立派
+Republic of Hawai'i	ハワイ共和国
+Korean Empire	大韓帝国
+Cretan State	クレタ自治国
+Sultanate of Muscat and Oman	マスカット・オマーン
+Commonwealth of Australia	オーストラリア
+Republic of Cuba	キューバ
+Republic of Panama	パナマ
+Portuguese Republic	ポルトガル(第一共和政)
+Maderistas	マデロ派(メキシコ革命)
+Tangier International Zone	タンジール国際管理地域
+Republic of Uryankhay	ウリャンハイ共和国(トゥヴァ)
+Republic of China	中華民国	~1949
+Republic of China	中華民国(台湾)	1950~
+Great Mongol State	モンゴル(ボグド・ハーン政権)
+Albania	アルバニア
+Qatar	カタール
+Imamate of Oman	オマーン・イマーム国
+Kingdom of Hejaz	ヒジャーズ王国
+Empire of China	中華帝国(袁世凱)
+Russian Republic	ロシア(革命期)
+Kuomintang	中国国民党の政府
+Asir	アスィール
+Azerbaijan Democratic Republic	アゼルバイジャン民主共和国
+Armenia	アルメニア共和国(第1共和国)
+Republic of Finland	フィンランド
+Serbia	セルビア
+Polish Armed Forces	ポーランド軍
+Kingdom of Iceland	アイスランド王国
+Czechoslovakia	チェコスロヴァキア
+Hungarian Republic	ハンガリー
+Kingdom of Romania	ルーマニア王国
+North Yemen	北イエメン
+Kingdom of Lithuania	リトアニア
+Ukrainian People's Republic	ウクライナ人民共和国
+Yugoslavia	ユーゴスラヴィア王国
+Estonia	エストニア
+Second Polish Republic	ポーランド(第二共和国)
+Republic of Austria	オーストリア共和国
+Weimar Republic	ドイツ(ヴァイマル共和国)
+Republic of Latvia	ラトヴィア
+Republics of the Soviet Union	ソヴィエト諸共和国
+French Mandate for Syria and Lebanon	フランス委任統治領シリア・レバノン
+Union of Soviet Socialist Republics	ソ連(ソヴィエト社会主義共和国連邦)
+Kingdom of Egypt	エジプト王国
+Republic of the Rif	リーフ共和国
+Irish Free State	アイルランド自由国
+Provisional Priamurye Government	沿アムール臨時政府
+Republic of Turkey	トルコ共和国
+Pahlavi Dynasty	パフレヴィー朝
+Kingdom of Afghanistan	アフガニスタン王国
+Mongolian People's Republic	モンゴル人民共和国
+Kingdom of Hejaz and Nejd	ヒジャーズ・ネジド王国
+Estado Novo	ポルトガル(エスタド・ノヴォ)	~1975
+Estado Novo	-	1976~
+Chinese Communists	中国共産党の支配地域
+Argentine Republic	アルゼンチン
+Anti-Kuomintang Coalition	反蔣介石連合
+South Africa	南アフリカ
+Canada	カナダ
+Kingdom of Thailand	タイ
+Kingdom of Iraq	イラク王国
+Second Spanish Republic	スペイン(第二共和政)
+Unitary State of Brazil	ブラジル(ヴァルガス政権)
+Communist Party of China	中国共産党の支配地域
+Kingdom of Saudi Arabia	サウジアラビア
+Spanish Nationalists	スペイン反乱軍(フランコ派)
+Nazi Germany	ナチス・ドイツ
+Republic of Haiti	ハイチ
+Éire	アイルランド
+Francoist Spain	スペイン(フランコ政権)
+Free French	自由フランス
+(Vichy France)	ヴィシー政府
+Vichy France	ヴィシー政府
+Independent State of Croatia	クロアティア独立国
+Ethiopia	エチオピア
+Yugoslav Partisans	ユーゴスラヴィアのパルチザン
+Lebanon	レバノン
+Kingdom of Greece	ギリシア王国
+French Fourth Republic	フランス(第四共和政)
+(French Fourth Republic)	フランス(第四共和政)
+East Turkestan Republic	東トルキスタン共和国
+Denmark	デンマーク
+People's Socialist Republic of Albania	アルバニア(社会主義)
+Socialist Federal Republic of Yugoslavia	ユーゴスラヴィア(社会主義連邦共和国)
+Republic of Italy	イタリア
+Republic of Indonesia	インドネシア
+Papua New Guinea	パプアニューギニア
+Republic of Iceland	アイスランド
+Second Republic of Austria	オーストリア
+Second Syrian Republic	シリア
+Kingdom of Bulgaria	ブルガリア王国
+Republic of India	インド
+Republic of the Philippines	フィリピン
+Islamic Republic of Pakistan	パキスタン
+Qatar Protectorate	カタール(イギリス保護領)
+Kingdom of Jordan	ヨルダン
+Hungary	ハンガリー
+New Zealand	ニュージーランド
+People's Republic of Bulgaria	ブルガリア人民共和国
+Democratic People's Republic of Korea	朝鮮民主主義人民共和国
+Republic of Korea	大韓民国
+Sri Lanka	スリランカ
+Socialist Republic of Romania	ルーマニア(社会主義)
+Palestinians	パレスチナ人の支配地域
+State of Israel	イスラエル
+German Democratic Republic	東ドイツ(ドイツ民主共和国)
+People's Republic of China	中華人民共和国
+Federal Republic of Germany	西ドイツ(ドイツ連邦共和国)
+Hungarian People's Republic	ハンガリー人民共和国
+Republic of Poland	ポーランド
+Japan	日本
+Republic of Egypt	エジプト共和国
+Kingdom of Libya	リビア王国
+Republic of Vietnam	ベトナム共和国(南ベトナム)
+Kingdom of Laos	ラオス王国
+Republic of Tunisia	チュニジア
+Kingdom of Cambodia	カンボジア
+Democratic Republic of Vietnam	ベトナム民主共和国(北ベトナム)
+Republic of Sudan	スーダン
+Ghana	ガーナ
+United Arab Republic	アラブ連合共和国
+Cuban Communists	キューバ革命軍
+Arab Federation	アラブ連邦
+French Fifth Republic	フランス
+Federation of Malaya	マラヤ連邦
+Madagascar	マダガスカル
+Mali Federation	マリ連邦	~1960
+Mali Federation	マリ	1961~
+Guinea	ギニア
+Togo	トーゴ
+Federal Republic of Somalia	ソマリア
+Democratic Republic of the Congo	コンゴ民主共和国
+Iraqi Republic	イラク共和国
+Communist Cuba	キューバ
+Republic of Cameroon	カメルーン
+Republic of the Congo	コンゴ共和国
+Gabon	ガボン
+Republic of Syria	シリア
+Tanzania	タンザニア
+State of Kuwait	クウェート
+Sierra Leone	シエラレオネ
+British East Africa	イギリス領東アフリカ
+Central African Republic	中央アフリカ
+Republic of Côte d'Ivoire	コートジボワール
+Republic of Senegal	セネガル
+Republic of Chad	チャド
+Republic of Cyprus	キプロス
+Republic of Benin	ベナン
+Federal Republic of Nigeria	ナイジェリア
+Mauritania	モーリタニア
+Burkina Faso	ブルキナファソ
+Republic of the Niger	ニジェール
+Republic of Kenya	ケニア
+Republic of Rwanda	ルワンダ
+Jamaica	ジャマイカ
+Republic of Trinidad and Tobago	トリニダード・トバゴ
+People's Democratic Republic of Algeria	アルジェリア
+Ba'athist Syria	シリア(バアス党政権)
+Malaysia	マレーシア
+Republic of Uganda	ウガンダ
+Republic of Burundi	ブルンジ
+Sultanate of Zanzibar	ザンジバル・スルタン国
+Malawi	マラウイ
+Federated Republic of Brazil	ブラジル(軍事政権)
+Lesotho	レソト
+Guyana	ガイアナ
+Arab Socialist Ba'ath Party	シリア(バアス党政権)
+Zambia	ザンビア
+Republic of The Gambia	ガンビア
+Barbados	バルバドス
+Rhodesia	ローデシア
+Malta	マルタ
+Greek junta	ギリシア(軍事政権)
+Republic of Singapore	シンガポール
+Saint Kitts	セントクリストファー・ネーヴィス
+Antigua and Barbuda	アンティグア・バーブーダ
+Republic of Botswana	ボツワナ
+Libyan Arab Republic	リビア
+Mauritius	モーリシャス
+People's Democratic Republic of Yemen	南イエメン
+Saint Vincent	セントビンセント・グレナディーン
+Eswatini	エスワティニ
+Equatorial Guinea	赤道ギニア
+Commonwealth of The Bahamas	バハマ
+Republic of Guinea-Bissau	ギニアビサウ
+Arab Republic of Egypt	エジプト
+Kingdom of Bahrain	バーレーン
+Syria	シリア
+Republic of Fiji	フィジー
+Republic of Afghanistan	アフガニスタン共和国
+People's Republic of Bangladesh	バングラデシュ
+State of Qatar	カタール
+United Arab Emirates	アラブ首長国連邦
+Zaire	ザイール
+Seychelles	セーシェル
+Turkish Republic of Northern Cyprus	北キプロス
+Socialist Republic of Vietnam	ベトナム
+Third Hellenic Republic	ギリシア
+People's Republic of Angola	アンゴラ
+Mozambique	モザンビーク
+Republic of Cabo Verde	カーボベルデ
+Khmer Rouge	民主カンプチア(ポル・ポト政権)
+Grenada	グレナダ
+Republic of Suriname	スリナム
+São Tomé and Príncipe	サントメ・プリンシペ
+Communist Laos	ラオス
+Portugal	ポルトガル
+People's Republic of Kampuchea	カンボジア人民共和国
+Commonwealth of Dominica	ドミニカ国
+Zimbabwe Rhodesia	ジンバブエ・ローデシア
+Saint Lucia	セントルシア
+Islamic Republic of Iran	イラン
+Solomon Islands	ソロモン諸島
+Afghanistan	アフガニスタン
+Republic of Djibouti	ジブチ
+Republic of Zimbabwe	ジンバブエ
+Vanuatu	バヌアツ
+Belize	ベリーズ
+Micronesia	ミクロネシア連邦
+Mujahideen	ムジャーヒディーンの支配地域
+Republic of Brazil	ブラジル
+Romania	ルーマニア
+Republic of Yemen	イエメン
+Republic of Lithuania	リトアニア
+Namibia	ナミビア
+Union of Myanmar	ミャンマー
+Federated Republic of Germany	ドイツ
+Republic of Albania	アルバニア
+Republic of Bulgaria	ブルガリア
+Republic of Tajikistan	タジキスタン
+Kazakhstan	カザフスタン
+Republic of Croatia	クロアティア
+Chechen Republic	チェチェン共和国
+Republic of Armenia	アルメニア
+Serbia-Montenegro	セルビア・モンテネグロ
+Republic of Slovenia	スロヴェニア
+Russian-occupied territories	ロシアの占領地域
+Mongolia	モンゴル
+Republic of Belarus	ベラルーシ
+Kyrgyzstan	キルギス
+Slovakia	スロヴァキア
+Republic of Azerbaijan	アゼルバイジャン
+Bosnia and Herzegovina	ボスニア・ヘルツェゴヴィナ
+Czech Republic	チェコ
+Former Yugoslav Republic of Macedonia	北マケドニア
+State of Eritrea	エリトリア
+Republic of Uzbekistan	ウズベキスタン
+(Russian Federation)	ロシア連邦
+Republic of Estonia	エストニア
+Republic of Moldova	モルドバ
+Ukraine	ウクライナ
+Russian Federation	ロシア連邦
+Turkmenistan	トルクメニスタン
+Taliban	ターリバーン政権
+Palau	パラオ
+Kosovo	コソボ
+(Commonwealth of Nations)	イギリス連邦
+British Overseas Territories	イギリスの海外領土
+Republic of Serbia	セルビア
+East Timor	東ティモール
+State of Libya	リビア
+South Sudan	南スーダン
+Gaza/Hamas	ガザ地区(ハマース)
+Republic of Iraq	イラク
