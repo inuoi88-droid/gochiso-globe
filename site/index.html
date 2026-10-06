@@ -643,12 +643,38 @@ function simplifyTopology(t, eps) {
   });
   return { type: 'Topology', objects: t.objects, arcs };
 }
-// A simplified sliver can turn inside out, or flatten into a ring with no area; d3 would fill the
-// whole globe with either one. Drop those polygons (and flattened holes) from the simplified copy.
-const flatRing = r => new Set(r.map(p => p[0] + ',' + p[1])).size < 3;
+// d3 fills the whole globe with a ring that is inside out or has no area once it reaches the
+// horizon. Simplifying can make such rings, and some outlines in the data have "spikes" (the line
+// runs out and straight back) that leave slivers with no area. So repeated points and spikes are
+// taken out of every ring, and rings that are still flat or inside out are dropped.
+function cleanRing(r) {
+  const same = (a, b) => a[0] === b[0] && a[1] === b[1];
+  // b is a repeat of a neighbour, or the line turns straight back at b
+  const spike = (a, b, c) => {
+    if (same(a, b) || same(b, c)) return true;
+    const ux = b[0] - a[0], uy = b[1] - a[1], vx = c[0] - b[0], vy = c[1] - b[1];
+    return ux * vx + uy * vy < 0 && Math.abs(ux * vy - uy * vx) <= 1e-6 * Math.hypot(ux, uy) * Math.hypot(vx, vy);
+  };
+  const st = [];
+  for (let i = 0; i < r.length - 1; i++) {
+    st.push(r[i]);
+    while (st.length >= 3 && spike(st[st.length - 3], st[st.length - 2], st[st.length - 1])) st.splice(st.length - 2, 1);
+  }
+  while (st.length >= 3) {   // where the ring closes
+    const n = st.length;
+    if (spike(st[n - 1], st[0], st[1])) st.shift();
+    else if (spike(st[n - 2], st[n - 1], st[0])) st.pop();
+    else if (same(st[n - 1], st[0])) st.pop();
+    else break;
+  }
+  if (st.length < 3) return null;
+  st.push(st[0]);
+  return st;
+}
 function polyOK(p) {
-  if (flatRing(p[0])) return null;
-  const q = p.length > 1 ? [p[0], ...p.slice(1).filter(r => !flatRing(r))] : p;
+  const outer = cleanRing(p[0]);
+  if (!outer) return null;
+  const q = [outer, ...p.slice(1).map(cleanRing).filter(Boolean)];
   const a = d3.geoArea({ type: 'Polygon', coordinates: q });
   return a > 1e-13 && a <= 2 * Math.PI ? q : null;
 }
@@ -656,7 +682,7 @@ function dropInsideOut(f) {
   const g = f.geometry;
   if (!g) return f;
   if (g.type === 'Polygon') { const q = polyOK(g.coordinates); if (q) g.coordinates = q; else f.geometry = null; }
-  else if (g.type === 'MultiPolygon') g.coordinates = g.coordinates.map(polyOK).filter(Boolean);
+  else if (g.type === 'MultiPolygon') { g.coordinates = g.coordinates.map(polyOK).filter(Boolean); if (!g.coordinates.length) f.geometry = null; }
   return f;
 }
 // the land as separate landmasses with no inner borders: filling one huge path with every country
@@ -2654,7 +2680,7 @@ function loadChunk(c) {
   if (ch) return ch.promise;
   ch = { ready: false, rows: null };
   ch.promise = fetch(histUrl(file)).then(r => { if (!r.ok) throw new Error(r.status); return r.json(); }).then(topo => {
-    const feats = topojson.feature(topo, topo.objects.p).features;
+    const feats = topojson.feature(topo, topo.objects.p).features.map(dropInsideOut);
     // simplified copies for drawing while zoomed out (same order as the full features)
     const lods = LOD_EPS.map(eps => { const st = simplifyTopology(topo, eps); return topojson.feature(st, st.objects.p).features.map(dropInsideOut); });
     ch.rows = [];
