@@ -36,6 +36,9 @@
             <button data-shape="globe" aria-pressed="true">地球儀</button>
             <button data-shape="flat" aria-pressed="false">平面</button>
           </div>
+          <p class="menuh">案内</p>
+          <button class="mitem" data-lag="replay"><b>使い方を聞く</b><small>銀河義賊ラグ☆ジュアリ～が案内します</small></button>
+          <button class="tog menutog" id="lag-intros" aria-pressed="true">モードを初めて開いたときに紹介する</button>
         </div>
       </div>
     </div>
@@ -145,6 +148,21 @@
       </div>
     </aside>
   </main>
+</div>
+
+<div class="lag" id="lag" hidden>
+  <div class="lag-spot" id="lag-spot" hidden></div>
+  <div class="lag-wrap">
+    <img class="lag-sprite" id="lag-sprite" alt="" aria-hidden="true">
+    <div class="lag-box" id="lag-box" role="dialog" aria-label="銀河義賊ラグ☆ジュアリ～の案内" tabindex="-1">
+      <p class="lag-name"><small>銀河義賊</small>ラグ☆ジュアリ～</p>
+      <button class="lag-skip" id="lag-skip">スキップ</button>
+      <p class="lag-text" id="lag-text" aria-hidden="true"></p>
+      <p class="sr" id="lag-live" aria-live="polite"></p>
+      <div class="lag-choices" id="lag-choices" hidden></div>
+      <span class="lag-more" id="lag-more" aria-hidden="true" hidden>▼</span>
+    </div>
+  </div>
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.9.0/d3.min.js"></script>

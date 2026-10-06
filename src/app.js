@@ -993,7 +993,7 @@ function updateSpinLabel() {
   const st = mode === 'hquiz' ? HQ.state : SQ.state;
   $('#spin-label').textContent = mode === 'explore' || mode === 'hist' ? 'シャッフル' : (st === 'answered' ? '次の問題' : st === 'asking' ? 'この問題をとばす' : '回して出題');
 }
-MODES.forEach(k => { $('#tab-' + k).onclick = () => { if (!spinning) setMode(k); }; });
+MODES.forEach(k => { $('#tab-' + k).onclick = () => { if (!spinning) { setMode(k); lagAuto(k); } }; });
 
 /* ---------------- display modes (⋯ menu) ---------------- */
 const WORLDS = {
@@ -1032,6 +1032,7 @@ function setWorld(w) {
   else setMode(mode, true);
   if (!/^#room-/.test(location.hash)) { try { history.replaceState(null, '', location.pathname + location.search + W0.hash); } catch (e) { /* file:// */ } }
   dirty = true;
+  lagAuto(w === 'modern' ? 'base' : w);
 }
 const menuBtn = $('#menu-btn'), menu = $('#menu');
 function openMenu(v) { menu.hidden = !v; menuBtn.setAttribute('aria-expanded', String(v)); }
@@ -1040,7 +1041,7 @@ menu.addEventListener('click', e => {
   const w = e.target.closest('[data-world]');
   if (w) { openMenu(false); setWorld(w.dataset.world); return; }
   const sh = e.target.closest('[data-shape]');
-  if (sh) { setFlat(sh.dataset.shape === 'flat'); if (mode === 'explore') renderExplore(); }
+  if (sh) { setFlat(sh.dataset.shape === 'flat'); if (mode === 'explore') renderExplore(); if (flat) lagAuto('flat'); }
 });
 document.addEventListener('click', e => { if (!menu.hidden && !e.target.closest('.menuwrap')) openMenu(false); });
 document.addEventListener('keydown', e => { if (e.key === 'Escape' && !menu.hidden) { openMenu(false); menuBtn.focus(); } });
@@ -1558,7 +1559,7 @@ if (QUIZ.extraText) rebuildExtra();
 $('#view-quiz').addEventListener('click', e => {
   const t = e.target;
   if (t.closest('#q-start') || t.closest('#q-next')) { nextQuestion(); return; }
-  if (t.closest('#q-battle')) { setMode('battle'); return; }
+  if (t.closest('#q-battle')) { setMode('battle'); lagAuto('battle'); return; }
   if (t.closest('#q-giveup')) { if (SQ.state === 'asking') { SQ.token++; finishSolo(false, ''); } return; }
   if (t.closest('#q-hint')) { if (SQ.state === 'asking' && SQ.cur.hint < maxHint(SQ.cur.q)) { SQ.cur.hint++; rerenderQuiz(); } return; }
   if (t.closest('#q-explore')) { const o = locObj(SQ.cur.q.loc); setMode('explore'); select(o); return; }
@@ -2802,6 +2803,257 @@ $('#view-hquiz').addEventListener('click', e => {
 });
 $('#view-hquiz').addEventListener('submit', e => { e.preventDefault(); hqAnswer(($('#hans') || {}).value || ''); });
 
+/* ================= guide: 銀河義賊ラグ☆ジュアリ～ ================= */
+// A novel-game style guide: the character stands on a text box at the bottom (or top) of the
+// screen and changes pose between lines, while a spotlight shows the part being explained.
+// The first visit asks whether to hear how things work; each mode explains itself the first
+// time it is opened. What has been shown is remembered per browser.
+const LAG_POSES = ['point', 'jaki', 'douzo', 'good'];   // ここだ! / ジャキーン! / どうぞ! / いいね!
+const lagSeen = store.get('lag', {});
+const roomLink = /^#room-/.test(location.hash);
+const lagSave = () => store.set('lag', lagSeen);
+const here = () => isNarrow() ? '下' : '右';
+const globeWord = () => flat ? '地図' : '地球儀';
+function lagShowPlace(id) {
+  const p = placeById.get(id); if (!p) return;
+  if (mode !== 'explore') setMode('explore');
+  select(p, { fly: true });
+}
+// each script is a list of [pose, text, { spot, do, choices }]; spot is a selector to light up,
+// do runs when the line starts
+const LAG = {
+  hello: () => [
+    ['jaki', 'やあやあ、はじめまして！\n私の名はキャプテン・ヘヴィー・ラグ☆ジュアリ～。泣く子も黙る銀河義賊さ'],
+    ['douzo', `この${globeWord()}でみんなを楽しませるのが、私の仕事。\nさっそく使い方を案内しようか？`, {
+      choices: [
+        ['聞く！', () => lagThen(world === 'history' ? ['history'] : world === 'food' ? ['base', 'food'] : ['base'])],
+        ['あとで', () => { lagSeen.off = true; lagSave(); syncLagMenu(); lagThen(['later']); }]
+      ]
+    }]
+  ],
+  later: () => [
+    ['good', 'オーケー！ モードの紹介もお休みしておこう。\n聞きたくなったら、右上の ⋯ からいつでも呼んでくれたまえ', { spot: '#menu-btn' }]
+  ],
+  base: () => [
+    ['point', `これが私の自慢の${globeWord()}！\nドラッグで${flat ? '自由に動かせる' : 'くるくる回せる'}のさ`, { spot: '#stage', do: () => { if (!spinning) animateTo(-rot[0] - 40, flat ? -rot[1] : clamp(-rot[1], -30, 30), zoom, { dur: 1300 }); } }],
+    ['jaki', 'ホイールやピンチ、左下の ＋ − で拡大・縮小。\n丸いボタンを押せば、全体の眺めに戻るよ', { spot: '.ov.zoom' }],
+    ['douzo', '国をタップすると、その国のことがわかる。\nちょっとやってみよう', { spot: '#stage' }],
+    ['jaki', '……雪山で遭難しちゃったよー。\n助からないね。寝るしかないね'],
+    ['point', 'いや、まだ助かる！ まだたすかる……\nマダガスカル！ それっ！ここ マダガスカル！', { spot: '#stage', do: () => lagShowPlace('MDG') }],
+    ['good', `……訳わかんねぇだろ！\nでもほら、${here()}にマダガスカルの${world === 'food' ? '郷土料理' : '首都'}や豆知識が出てきたはずさ`, { spot: '#panel' }],
+    ['douzo', '行きたい場所が決まっているなら、ここに国名や都市名を入れてね。\nひらがなでもオーケーさ', { spot: '.search' }],
+    ['jaki', `迷ったらシャッフル！\n${globeWord()}が回って、止まった場所が今日の行き先さ`, { spot: '#spin-wrap' }],
+    ['point', '国名や都市の表示、自動回転、効果音は\nこのボタンで切り替えられるよ', { spot: '.toggles' }],
+    ['douzo', '『クイズ』で腕試し、『対戦』で友達と早押し勝負もできる。\n詳しくは、開いたときに教えよう', { spot: '.tabs' }],
+    ['point', 'そしてここからが本番！\n右上の ⋯ を開くと……', { spot: '#menu-btn' }],
+    ['jaki', '『タイムスリップ』で西暦1年の世界へひとっ飛び！\n1年ずつ、歴史の地図をめくれるのさ', { spot: '[data-world="history"]', do: () => openMenu(true) }],
+    ['douzo', '『ごちそう』は、世界の郷土料理をめぐる特別モード。\nおなかが空いても責任はとらないよ', { spot: '[data-world="food"]', do: () => openMenu(true) }],
+    ['point', '地図の形は、地球儀と平面から選べる', { spot: '.menuseg', do: () => openMenu(true) }],
+    ['good', '説明はここまで！\n困ったら『使い方を聞く』で、いつでも私を呼んでくれたまえ', { spot: '[data-lag="replay"]', do: () => openMenu(true) }],
+    ['jaki', 'さあ、君のハートにレボリューション！\nファンタスティック!!!', { do: () => openMenu(false) }]
+  ],
+  history: () => [
+    ['jaki', `ようこそ、時の旅へ！\nここは西暦${TS.year}年の世界さ`, { spot: '#stage' }],
+    ['point', '下のバーで年を動かせる。ボタンなら1年・10年・100年ずつ。\n年の数字を押せば、直接入力もできるよ', { spot: '#timebar' }],
+    ['douzo', '▶で再生すると、国が生まれては消えていく。\nこれこそ宇宙……', { spot: '#tb-play' }],
+    ['point', `国をタップすると、${here()}に図鑑が開く。\n建国した人や英雄、首都や発明品までぎっしりさ`, { spot: '#panel' }],
+    ['jaki', '図鑑の『興亡を再生』を押せば、\nその国を追いかけながら再生できる', { spot: '#panel' }],
+    ['douzo', '上の『現代の国境』を押すと、\n今の国境線を重ねて見られるよ', { spot: '#t-modern' }],
+    ['point', '『2つの年を比べる』なら、\n昔と今を左右に並べて見比べられるのさ', { spot: '#tb-cmp' }],
+    ['good', '『クイズ』では「この年、ここを支配していたのは？」なんて問題が出る。\n人物を当てると、人物カードが手に入るよ', { spot: '#tab-hquiz' }],
+    ['jaki', 'さあ、歴史の大海原へ出航だ！\nファンタスティック!!!']
+  ],
+  food: () => [
+    ['douzo', 'ごちそうモードへようこそ！\nここでは世界の郷土料理を紹介するよ', { spot: '#stage', do: () => { if (mode !== 'explore' && !battleBusy()) setMode('explore'); } }],
+    ['point', `国を選ぶと、${here()}にその国の郷土料理が並ぶ。\n『作り方』を押せば、レシピを探しに行けるのさ`, { spot: '#panel' }],
+    ['jaki', `今日の晩ごはんに迷ったら、\nシャッフルで${globeWord()}に決めてもらうのもアリだね`, { spot: '#spin-wrap' }],
+    ['good', 'おなかが鳴っても、私のせいじゃないからね！']
+  ],
+  quiz: () => [
+    ['point', `クイズの時間だ！\n『回して出題』を押すと${globeWord()}が回って、止まった場所の問題が出る`, { spot: '#spin-wrap' }],
+    ['douzo', '問題文は少しずつ表示される。\n全部出る前に答えてもオーケー、早応えってやつさ', { spot: '#panel' }],
+    ['jaki', '難易度や地域、4択か入力かは『出題設定』で選べるよ', { spot: '#sq-settings' }],
+    ['good', '連続正解で最高記録を目指そう！\n全問正解したら…… ファンタスティック!!!']
+  ],
+  battle: () => [
+    ['jaki', '対戦モードでは、友達と同じ問題で早押し勝負ができる！', { spot: '#panel' }],
+    ['douzo', '『部屋を作る』を押して、部屋コードを友達に教えよう。\n招待リンクを送るだけでも参加できるよ', { spot: '#b-create' }],
+    ['good', '早く答えるほど高得点。\n泣く子も黙る早押しの腕前、見せてくれたまえ！']
+  ],
+  hquiz: () => [
+    ['point', '歴史クイズだ！\n『地図から』は、その年に止まった場所を支配していた国を答える', { spot: '#panel' }],
+    ['douzo', '『図鑑から』は、建国者や首都、発明なんかの問題。\n人物を答えると、人物カードが手に入るよ', { spot: '#panel' }],
+    ['jaki', '時代も選べるから、得意な時代から攻めてみよう', { spot: '#hq-settings' }],
+    ['good', '集めたカードは図鑑で見られる。\nコンプリート目指してファイトだ！']
+  ],
+  flat: () => [
+    ['douzo', '平面の地図に切り替えたよ。\nドラッグで動かして、ホイールやピンチで拡大できる', { spot: '#stage', do: () => openMenu(false) }],
+    ['jaki', 'でもやっぱり、丸い方がロマンがあると思わないかい？\n戻すときは ⋯ の『地球儀』を押してね', { spot: '#menu-btn' }]
+  ]
+};
+const Lag = { on: false, key: '', lines: [], i: 0, line: null, chars: [], shown: 0, timer: 0, q: [], spotEl: null, spotKey: '', raf: 0, focus: null };
+const lagEl = $('#lag'), lagBox = $('#lag-box'), lagImg = $('#lag-sprite'), lagSpot = $('#lag-spot');
+lagImg.addEventListener('animationend', () => lagImg.classList.remove('enter', 'hop'));
+function lagRun(key) {
+  if (!LAG[key]) return;
+  if (Lag.on) { if (Lag.key !== key && !Lag.q.includes(key)) Lag.q.push(key); return; }
+  if (!lagEl.hidden) return;
+  LAG_POSES.forEach(p => { new Image().src = `img/lag-${p}.webp`; });
+  Lag.on = true; Lag.focus = document.activeElement;
+  hideTip(); stopMotion();
+  lagEl.hidden = false;
+  lagImg.classList.remove('hop'); lagImg.classList.add('enter');
+  lagStart(key);
+  lagBox.focus({ preventScroll: true });
+  if (!Lag.raf) Lag.raf = requestAnimationFrame(lagTick);
+}
+function lagStart(key) {
+  Lag.key = key;
+  if (key !== 'hello' && key !== 'later') { lagSeen[key] = true; lagSave(); }
+  Lag.lines = LAG[key]();
+  lagLine(0);
+}
+function lagLine(i) {
+  if (i >= Lag.lines.length) { lagEnd(); return; }
+  Lag.i = i;
+  const [pose, text, o = {}] = Lag.lines[i];
+  Lag.line = o;
+  if (o.do) o.do();
+  if (lagImg.dataset.pose !== pose) {   // a little hop on each change of pose
+    const had = !!lagImg.dataset.pose;
+    lagImg.dataset.pose = pose; lagImg.src = `img/lag-${pose}.webp`;
+    if (had && !lagImg.classList.contains('enter')) { lagImg.classList.remove('hop'); void lagImg.offsetWidth; lagImg.classList.add('hop'); }
+  }
+  Lag.chars = Array.from(text); Lag.shown = 0;
+  $('#lag-text').textContent = '';
+  $('#lag-live').textContent = text;
+  $('#lag-choices').hidden = true; $('#lag-more').hidden = true;
+  lagSetSpot(o.spot);
+  lastInteract = now();
+  clearTimeout(Lag.timer);
+  if (REDUCED) lagFinishLine(); else lagType();
+}
+function lagType() {
+  if (Lag.shown >= Lag.chars.length) { lagFinishLine(); return; }
+  const ch = Lag.chars[Lag.shown++];
+  $('#lag-text').textContent = Lag.chars.slice(0, Lag.shown).join('');
+  Lag.timer = setTimeout(lagType, '、。！？!?…'.includes(ch) ? 150 : ch === '\n' ? 220 : 34);
+}
+function lagFinishLine() {
+  clearTimeout(Lag.timer);
+  Lag.shown = Lag.chars.length;
+  $('#lag-text').textContent = Lag.chars.join('');
+  const ch = Lag.line && Lag.line.choices;
+  if (ch) {
+    const box = $('#lag-choices');
+    box.innerHTML = ch.map(([label], k) => `<button data-lc="${k}">${esc(label)}</button>`).join('');
+    box.hidden = false;
+    box.querySelector('button').focus({ preventScroll: true });
+  } else $('#lag-more').hidden = false;
+}
+function lagAdvance() {
+  if (!Lag.on) return;
+  if (Lag.shown < Lag.chars.length) { lagFinishLine(); return; }
+  if (Lag.line && Lag.line.choices) return;   // waiting for an answer
+  lagLine(Lag.i + 1);
+}
+// finish this script and go on to the given ones (from a choice)
+function lagThen(keys) { Lag.q.unshift(...keys); lagEnd(); }
+function lagEnd() {
+  clearTimeout(Lag.timer);
+  if (Lag.key === 'hello' || Lag.key === 'later') { lagSeen.asked = true; lagSave(); }
+  const next = Lag.q.shift();
+  if (next) { lagStart(next); return; }
+  Lag.on = false; Lag.key = ''; Lag.spotEl = null; Lag.spotKey = '';
+  lagEl.hidden = true; lagSpot.hidden = true;
+  lagImg.classList.remove('hop', 'enter'); delete lagImg.dataset.pose;
+  openMenu(false);
+  lastInteract = now();
+  // give focus back (to the ⋯ button when the guide was called from the menu, which is now closed)
+  const f = Lag.focus;
+  if (f && f.focus && document.contains(f) && f.getClientRects().length) f.focus({ preventScroll: true });
+  else if (f && f.closest && f.closest('.menuwrap')) menuBtn.focus({ preventScroll: true });
+}
+function lagSkip() {
+  if (Lag.key === 'hello') { lagSeen.asked = true; lagSave(); }
+  Lag.q.length = 0;
+  lagEnd();
+}
+function lagSetSpot(sel) {
+  const el = sel ? document.querySelector(sel) : null;
+  Lag.spotEl = el && el.getClientRects().length ? el : null;
+  Lag.spotKey = '';
+  if (Lag.spotEl) {
+    // bring it into view (phones stack the panel under the globe)
+    const r = Lag.spotEl.getBoundingClientRect();
+    if (r.top < 0 || r.bottom > innerHeight) Lag.spotEl.scrollIntoView({ block: r.height > innerHeight * 0.6 ? 'start' : 'center', behavior: 'auto' });
+  }
+  lagPlace();
+}
+// the text box goes to the top when the lit-up part is in the lower half of the screen
+function lagPlace() {
+  let top = false;
+  if (Lag.spotEl) {
+    const r = Lag.spotEl.getBoundingClientRect();
+    top = r.height < innerHeight * 0.5 && (r.top + r.bottom) / 2 > innerHeight * 0.55;
+  }
+  lagEl.classList.toggle('lag-up', top);
+  lagEl.classList.toggle('lag-dim', !Lag.spotEl);
+}
+function lagTick() {
+  Lag.raf = 0;
+  if (!Lag.on) return;
+  const el = Lag.spotEl;
+  if (el && el.getClientRects().length) {
+    const r = el.getBoundingClientRect(), pad = 6;
+    const x = Math.max(4, r.left - pad), y = Math.max(4, r.top - pad);
+    const w = Math.min(innerWidth - 4, r.right + pad) - x, h = Math.min(innerHeight - 4, r.bottom + pad) - y;
+    const k = `${x | 0},${y | 0},${w | 0},${h | 0}`;
+    if (k !== Lag.spotKey) {
+      const firstShow = lagSpot.hidden;
+      if (firstShow) lagSpot.style.transition = 'none';
+      Object.assign(lagSpot.style, { left: x + 'px', top: y + 'px', width: Math.max(0, w) + 'px', height: Math.max(0, h) + 'px' });
+      lagSpot.hidden = h <= 0 || w <= 0;
+      if (firstShow) { void lagSpot.offsetWidth; lagSpot.style.transition = ''; }
+      Lag.spotKey = k;
+    }
+  } else if (!lagSpot.hidden) { lagSpot.hidden = true; lagEl.classList.add('lag-dim'); }
+  Lag.raf = requestAnimationFrame(lagTick);
+}
+lagEl.addEventListener('click', e => {
+  e.stopPropagation();   // keep the ⋯ menu open while it is being explained
+  const c = e.target.closest('[data-lc]');
+  if (c) { const fn = Lag.line && Lag.line.choices && Lag.line.choices[+c.dataset.lc]; if (fn) fn[1](); return; }
+  if (e.target.closest('#lag-skip')) { lagSkip(); return; }
+  lagAdvance();
+});
+// on window, so it runs before the page's own shortcuts (typing jumps to the answer box, Enter = next question)
+addEventListener('keydown', e => {
+  if (!Lag.on) return;
+  const onBtn = e.target.closest && e.target.closest('#lag button');
+  if (e.key === 'Escape') { e.preventDefault(); e.stopImmediatePropagation(); lagSkip(); return; }
+  if ((e.key === 'Enter' || e.key === ' ' || e.key === 'ArrowRight') && !onBtn) { e.preventDefault(); e.stopImmediatePropagation(); lagAdvance(); return; }
+  if (e.key === 'Tab') {   // keep focus inside the guide
+    const f = [lagBox, ...lagEl.querySelectorAll('button:not([hidden])')].filter(x => x.getClientRects().length);
+    const i = f.indexOf(document.activeElement);
+    e.preventDefault(); f[(i + (e.shiftKey ? f.length - 1 : 1)) % f.length].focus();
+  }
+}, true);
+addEventListener('resize', () => { if (Lag.on) { Lag.spotKey = ''; lagPlace(); } });
+// the first time a mode is opened (after the first-visit question has been answered)
+function lagAuto(key) {
+  if (!LAG[key] || roomLink || B.net || lagSeen.off || !lagSeen.asked || lagSeen[key]) return;
+  lagRun(key);
+}
+function syncLagMenu() { $('#lag-intros').setAttribute('aria-pressed', String(!lagSeen.off)); }
+syncLagMenu();
+$('#lag-intros').onclick = () => { lagSeen.off = !lagSeen.off; lagSave(); syncLagMenu(); };
+$('[data-lag="replay"]').onclick = () => {
+  openMenu(false);
+  if (spinning || battleBusy()) { toast('いまの勝負が終わってから呼んでくれたまえ'); return; }
+  lagRun(world === 'history' ? 'history' : 'base');
+};
+
 /* ---------------- start ---------------- */
 select(placeById.get('JPN'));
 recent.length = 0; recent.push(placeById.get('JPN'));
@@ -2814,5 +3066,7 @@ const hm = location.hash.match(/^#room-([A-Za-z0-9]{4})$/);
 if (hm) { B.joinCode = hm[1].toUpperCase(); setMode('battle'); }
 else if (location.hash === '#timeslip') setWorld('history');
 else if (location.hash === '#food') setWorld('food');
-window.__globe = { B, SQ, QUIZ, TS, HQ, allQs, buildQuestions, findMentions, makeChoices, setWorld, setFlat, setYear, llAt, histAt };
+// first visit: ask whether to hear the guide (not when arriving through a battle invitation)
+if (!roomLink && !lagSeen.asked) setTimeout(() => { if (!spinning) lagRun('hello'); }, 900);
+window.__globe = { B, SQ, QUIZ, TS, HQ, allQs, buildQuestions, findMentions, makeChoices, setWorld, setFlat, setYear, llAt, histAt, lag: { run: lagRun, seen: lagSeen, state: Lag } };
 })();
