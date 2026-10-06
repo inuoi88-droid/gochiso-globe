@@ -57,27 +57,51 @@ const disputed = fc.features.filter(f => placeById.get(f.id) && placeById.get(f.
 // drawn from simplified copies of the map (Douglas-Peucker on each topology arc, so shared
 // borders stay shared and neighbours still meet). Clicks always test the full-detail shapes.
 const LOD_EPS = [0.1, 0.03];   // degrees kept by the two simplified levels
+// Douglas-Peucker on the sphere (eps in degrees): d3 draws every segment as a great circle, so the
+// error is measured from that circle, not in flat lon/lat (where a border along a parallel would
+// collapse into one long chord)
 function dpArc(pts, eps) {
   const n = pts.length;
   if (n <= 3) return pts;
+  const V = new Float64Array(n * 3);
+  for (let i = 0; i < n; i++) {
+    const l = pts[i][0] * RAD, p = pts[i][1] * RAD, c = Math.cos(p);
+    V[3 * i] = c * Math.cos(l); V[3 * i + 1] = c * Math.sin(l); V[3 * i + 2] = Math.sin(p);
+  }
+  const chord = (i, j) => Math.hypot(V[3 * i] - V[3 * j], V[3 * i + 1] - V[3 * j + 1], V[3 * i + 2] - V[3 * j + 2]);
+  // distance of point i from the great-circle segment a-b (about the angle in radians, for small ones)
+  function dist(i, a, b) {
+    const ax = V[3 * a], ay = V[3 * a + 1], az = V[3 * a + 2], bx = V[3 * b], by = V[3 * b + 1], bz = V[3 * b + 2];
+    const px = V[3 * i], py = V[3 * i + 1], pz = V[3 * i + 2];
+    const nx = ay * bz - az * by, ny = az * bx - ax * bz, nz = ax * by - ay * bx, len = Math.hypot(nx, ny, nz);
+    if (len < 1e-12) return chord(i, a);
+    // beyond either end of the segment: distance to the nearer end
+    if ((ay * pz - az * py) * nx + (az * px - ax * pz) * ny + (ax * py - ay * px) * nz < 0 ||
+        (py * bz - pz * by) * nx + (pz * bx - px * bz) * ny + (px * by - py * bx) * nz < 0) return Math.min(chord(i, a), chord(i, b));
+    return Math.abs(nx * px + ny * py + nz * pz) / len;
+  }
+  const tol = eps * RAD;
   const keep = new Uint8Array(n); keep[0] = keep[n - 1] = 1;
   const closed = pts[0][0] === pts[n - 1][0] && pts[0][1] === pts[n - 1][1];
   const stack = [];
   if (closed) {   // a ring: anchor it at the point farthest from its start as well
     let far = 1, fd = -1;
-    for (let i = 1; i < n - 1; i++) { const d = Math.hypot(pts[i][0] - pts[0][0], pts[i][1] - pts[0][1]); if (d > fd) { fd = d; far = i; } }
+    for (let i = 1; i < n - 1; i++) { const d = chord(i, 0); if (d > fd) { fd = d; far = i; } }
     keep[far] = 1; stack.push([0, far], [far, n - 1]);
   } else stack.push([0, n - 1]);
+  let kept = 2 + (closed ? 1 : 0);
   while (stack.length) {
     const [a, b] = stack.pop();
-    const [x1, y1] = pts[a], [x2, y2] = pts[b];
-    const dx = x2 - x1, dy = y2 - y1, len = Math.hypot(dx, dy) || 1e-12;
-    let idx = -1, md = eps;
+    let idx = -1, md = tol, fi = -1, fd = -1;
     for (let i = a + 1; i < b; i++) {
-      const d = Math.abs(dy * pts[i][0] - dx * pts[i][1] + x2 * y1 - y2 * x1) / len;
+      const d = dist(i, a, b);
       if (d > md) { md = d; idx = i; }
+      if (d > fd) { fd = d; fi = i; }
     }
-    if (idx >= 0) { keep[idx] = 1; stack.push([a, idx], [idx, b]); }
+    // an open arc never shrinks to just its two ends: a small island made of two arcs would
+    // otherwise become a ring with no area, which d3 fills as the whole globe at the horizon
+    if (idx < 0 && kept === 2 && !closed && fi > 0) idx = fi;
+    if (idx >= 0) { keep[idx] = 1; kept++; stack.push([a, idx], [idx, b]); }
   }
   const out = [];
   for (let i = 0; i < n; i++) if (keep[i]) out.push(pts[i]);
@@ -93,18 +117,27 @@ function simplifyTopology(t, eps) {
   });
   return { type: 'Topology', objects: t.objects, arcs };
 }
-// a simplified sliver can turn inside out, and d3 would then fill the whole globe with it
+// A simplified sliver can turn inside out, or flatten into a ring with no area; d3 would fill the
+// whole globe with either one. Drop those polygons (and flattened holes) from the simplified copy.
+const flatRing = r => new Set(r.map(p => p[0] + ',' + p[1])).size < 3;
+function polyOK(p) {
+  if (flatRing(p[0])) return null;
+  const q = p.length > 1 ? [p[0], ...p.slice(1).filter(r => !flatRing(r))] : p;
+  const a = d3.geoArea({ type: 'Polygon', coordinates: q });
+  return a > 1e-13 && a <= 2 * Math.PI ? q : null;
+}
 function dropInsideOut(f) {
   const g = f.geometry;
-  if (!g || g.type !== 'MultiPolygon') { if (g && g.type === 'Polygon' && d3.geoArea(g) > 2 * Math.PI) f.geometry = null; return f; }
-  g.coordinates = g.coordinates.filter(p => d3.geoArea({ type: 'Polygon', coordinates: p }) <= 2 * Math.PI);
+  if (!g) return f;
+  if (g.type === 'Polygon') { const q = polyOK(g.coordinates); if (q) g.coordinates = q; else f.geometry = null; }
+  else if (g.type === 'MultiPolygon') g.coordinates = g.coordinates.map(polyOK).filter(Boolean);
   return f;
 }
 // the land as separate landmasses with no inner borders: filling one huge path with every country
 // in it is slow, and filling countries one by one leaves faint seams between them
 function landPieces(t) {
   return topojson.merge(t, t.objects.countries.geometries).coordinates
-    .map(c => ({ type: 'Polygon', coordinates: c })).filter(p => d3.geoArea(p) <= 2 * Math.PI);
+    .map(polyOK).filter(Boolean).map(c => ({ type: 'Polygon', coordinates: c }));
 }
 const lodLevels = [null, null, { fc, classFC, borders, coast, featById, disputed, land: null }];
 function lodMap(level) {
@@ -1767,6 +1800,7 @@ function hostNext() {
   B.hostTimer = setTimeout(() => hostReveal(r), LEAD_MS + SPIN_TOTAL + INTRO_MS + readPlan(q.text, msPerChar).total + B.settings.time * 1000 + 2500);
 }
 function onQuestion(m) {
+  if (Lag.on) lagSkip();   // a round is starting: the guide must not cover it
   B.round = m.round; B.total = m.total; B.qp = m.q; B.q = fromWire(m.q); B.timeLimit = m.timeLimit;
   B.msPerChar = m.msPerChar || READ_SPEEDS.normal;
   B.answers = new Map(); B.myAns = null; B.results = null; B.err = ''; B.stage = ''; B.read = null;
@@ -2073,7 +2107,7 @@ function histEnter() {
       TS.events = idx.events.map(([y, lon, lat, title, desc, pol]) => ({ y, lp: [lon, lat], title, desc, pol }));
       TS.loading = null;
       buildTicks(); buildHQPool();
-      if (world === 'history') { setYear(TS.year, { force: true }); renderHist(); if (mode === 'hquiz') renderHQuiz(); }
+      if (world === 'history') { setYear(TS.year, { force: true }); renderHist(); if (mode === 'hquiz') { renderHQuiz(); lagAuto('hquiz'); } }
     }).catch(() => {
       TS.loading = null;
       TS.err = location.protocol.startsWith('http') ? '歴史地図のデータを読み込めませんでした。通信状況を確かめて、もう一度開いてください。' : '歴史地図はファイルを直接開くと読み込めません。公開ページ(Vercel)か、ローカルのWebサーバーから開いてください。';
@@ -2813,9 +2847,12 @@ const lagSeen = store.get('lag', {});
 const roomLink = /^#room-/.test(location.hash);
 const lagSave = () => store.set('lag', lagSeen);
 const here = () => isNarrow() ? '下' : '右';
+// the guide never interrupts a spin, a question being asked, or an online battle
+const soloBusy = () => ['spinning', 'asking'].includes(SQ.state) || ['spinning', 'asking'].includes(HQ.state);
+const lagBlocked = () => spinning || soloBusy() || !!B.net || battleBusy();
 const globeWord = () => flat ? '地図' : '地球儀';
 function lagShowPlace(id) {
-  const p = placeById.get(id); if (!p) return;
+  const p = placeById.get(id); if (!p || lagBlocked()) return;
   if (mode !== 'explore') setMode('explore');
   select(p, { fly: true });
 }
@@ -2835,7 +2872,7 @@ const LAG = {
     ['good', 'オーケー！ モードの紹介もお休みしておこう。\n聞きたくなったら、右上の ⋯ からいつでも呼んでくれたまえ', { spot: '#menu-btn' }]
   ],
   base: () => [
-    ['point', `これが私の自慢の${globeWord()}！\nドラッグで${flat ? '自由に動かせる' : 'くるくる回せる'}のさ`, { spot: '#stage', do: () => { if (!spinning) animateTo(-rot[0] - 40, flat ? -rot[1] : clamp(-rot[1], -30, 30), zoom, { dur: 1300 }); } }],
+    ['point', `これが私の自慢の${globeWord()}！\nドラッグで${flat ? '自由に動かせる' : 'くるくる回せる'}のさ`, { spot: '#stage', do: () => { if (!lagBlocked()) animateTo(-rot[0] - 40, flat ? -rot[1] : clamp(-rot[1], -30, 30), zoom, { dur: 1300 }); } }],
     ['jaki', 'ホイールやピンチ、左下の ＋ − で拡大・縮小。\n丸いボタンを押せば、全体の眺めに戻るよ', { spot: '.ov.zoom' }],
     ['douzo', '国をタップすると、その国のことがわかる。\nちょっとやってみよう', { spot: '#stage' }],
     ['jaki', '……雪山で遭難しちゃったよー。\n助からないね。寝るしかないね'],
@@ -2864,7 +2901,7 @@ const LAG = {
     ['jaki', 'さあ、歴史の大海原へ出航だ！\nファンタスティック!!!']
   ],
   food: () => [
-    ['douzo', 'ごちそうモードへようこそ！\nここでは世界の郷土料理を紹介するよ', { spot: '#stage', do: () => { if (mode !== 'explore' && !battleBusy()) setMode('explore'); } }],
+    ['douzo', 'ごちそうモードへようこそ！\nここでは世界の郷土料理を紹介するよ', { spot: '#stage', do: () => { if (mode === 'battle' && !lagBlocked()) setMode('explore'); } }],
     ['point', `国を選ぶと、${here()}にその国の郷土料理が並ぶ。\n『作り方』を押せば、レシピを探しに行けるのさ`, { spot: '#panel' }],
     ['jaki', `今日の晩ごはんに迷ったら、\nシャッフルで${globeWord()}に決めてもらうのもアリだね`, { spot: '#spin-wrap' }],
     ['good', 'おなかが鳴っても、私のせいじゃないからね！']
@@ -2902,6 +2939,7 @@ function lagRun(key) {
   Lag.on = true; Lag.focus = document.activeElement;
   hideTip(); stopMotion();
   lagEl.hidden = false;
+  $('.app').inert = true;   // the page behind can't take focus or be used while the guide talks
   lagImg.classList.remove('hop'); lagImg.classList.add('enter');
   lagStart(key);
   lagBox.focus({ preventScroll: true });
@@ -2968,11 +3006,14 @@ function lagEnd() {
   lagEl.hidden = true; lagSpot.hidden = true;
   lagImg.classList.remove('hop', 'enter'); delete lagImg.dataset.pose;
   openMenu(false);
+  $('.app').inert = false;
   lastInteract = now();
-  // give focus back (to the ⋯ button when the guide was called from the menu, which is now closed)
+  // give focus back: to where it was, to the ⋯ button when the guide was called from the menu
+  // (now closed), or to the current tab when that place has gone (e.g. a hidden view)
   const f = Lag.focus;
   if (f && f.focus && document.contains(f) && f.getClientRects().length) f.focus({ preventScroll: true });
   else if (f && f.closest && f.closest('.menuwrap')) menuBtn.focus({ preventScroll: true });
+  else if (f && f !== document.body) $('#tab-' + mode).focus({ preventScroll: true });
 }
 function lagSkip() {
   if (Lag.key === 'hello') { lagSeen.asked = true; lagSave(); }
@@ -3023,7 +3064,12 @@ function lagTick() {
 lagEl.addEventListener('click', e => {
   e.stopPropagation();   // keep the ⋯ menu open while it is being explained
   const c = e.target.closest('[data-lc]');
-  if (c) { const fn = Lag.line && Lag.line.choices && Lag.line.choices[+c.dataset.lc]; if (fn) fn[1](); return; }
+  if (c) {
+    const fn = Lag.line && Lag.line.choices && Lag.line.choices[+c.dataset.lc];
+    lagBox.focus({ preventScroll: true });   // the choice buttons are about to disappear
+    if (fn) fn[1]();
+    return;
+  }
   if (e.target.closest('#lag-skip')) { lagSkip(); return; }
   lagAdvance();
 });
@@ -3042,7 +3088,8 @@ addEventListener('keydown', e => {
 addEventListener('resize', () => { if (Lag.on) { Lag.spotKey = ''; lagPlace(); } });
 // the first time a mode is opened (after the first-visit question has been answered)
 function lagAuto(key) {
-  if (!LAG[key] || roomLink || B.net || lagSeen.off || !lagSeen.asked || lagSeen[key]) return;
+  if (!LAG[key] || roomLink || lagSeen.off || !lagSeen.asked || lagSeen[key] || lagBlocked()) return;
+  if (key === 'hquiz' && !TS.idx) return;   // shown once the history data has arrived (see histEnter)
   lagRun(key);
 }
 function syncLagMenu() { $('#lag-intros').setAttribute('aria-pressed', String(!lagSeen.off)); }
@@ -3050,7 +3097,7 @@ syncLagMenu();
 $('#lag-intros').onclick = () => { lagSeen.off = !lagSeen.off; lagSave(); syncLagMenu(); };
 $('[data-lag="replay"]').onclick = () => {
   openMenu(false);
-  if (spinning || battleBusy()) { toast('いまの勝負が終わってから呼んでくれたまえ'); return; }
+  if (lagBlocked()) { toast(B.net ? '対戦が終わってから呼んでくれたまえ' : '回答してから呼んでくれたまえ'); return; }
   lagRun(world === 'history' ? 'history' : 'base');
 };
 
@@ -3066,7 +3113,14 @@ const hm = location.hash.match(/^#room-([A-Za-z0-9]{4})$/);
 if (hm) { B.joinCode = hm[1].toUpperCase(); setMode('battle'); }
 else if (location.hash === '#timeslip') setWorld('history');
 else if (location.hash === '#food') setWorld('food');
-// first visit: ask whether to hear the guide (not when arriving through a battle invitation)
-if (!roomLink && !lagSeen.asked) setTimeout(() => { if (!spinning) lagRun('hello'); }, 900);
-window.__globe = { B, SQ, QUIZ, TS, HQ, allQs, buildQuestions, findMentions, makeChoices, setWorld, setFlat, setYear, llAt, histAt, lag: { run: lagRun, seen: lagSeen, state: Lag } };
+// first visit: ask whether to hear the guide (not when arriving through a battle invitation);
+// a visitor who first came straight to the time slip gets the basic tour on a later visit.
+// Waits while a spin, a question or a battle is under way.
+function lagStartup() {
+  if (roomLink || (lagSeen.asked && (world !== 'modern' || lagSeen.base || lagSeen.off))) return;
+  if (lagBlocked() || Lag.on) { setTimeout(lagStartup, 1500); return; }
+  if (!lagSeen.asked) lagRun('hello'); else lagAuto('base');
+}
+setTimeout(lagStartup, 900);
+window.__globe = { B, SQ, QUIZ, TS, HQ, allQs, buildQuestions, findMentions, makeChoices, setWorld, setFlat, setYear, llAt, histAt, lag: { run: lagRun, seen: lagSeen, state: Lag }, view: (lon, lat, z) => { autoSpin = false; animateTo(lon, lat, z || zoom, { dur: 1 }); } };
 })();
